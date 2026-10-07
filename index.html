@@ -61,6 +61,10 @@ a{color:#fff}
 .searchresults .sr-meta div:first-child{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 .banner{margin:-32px 16px 0;background:linear-gradient(90deg,#1c3b2e,#2f7d4f);color:#fff;border-radius:14px;padding:11px 14px;font-size:13px;font-weight:600;box-shadow:0 10px 22px rgba(20,60,40,.26);border:1px solid rgba(255,255,255,.14);display:flex;align-items:center;gap:8px;position:relative;z-index:3}
+.promo-rail{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:10px;padding:12px 16px 2px;scrollbar-width:none}
+.promo-rail::-webkit-scrollbar{display:none}
+.promo-rail img{flex:0 0 86%;scroll-snap-align:center;border-radius:14px;width:86%;aspect-ratio:12/5;object-fit:cover;box-shadow:0 8px 18px rgba(20,10,15,.18)}
+body.sheet-open .cartstrip{display:none}
 
 .quickcats{display:flex;gap:16px;overflow-x:auto;padding:4px 2px}
 .qc{display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:0;flex:0 0 auto}
@@ -269,7 +273,6 @@ body{margin:0}
         <a class="owner-btn" href="owner.html">Shop owner</a>
       </div>
       <div class="brand">
-        <span class="demo-tag" id="demoTag">Demo catalogue</span>
         <h1>Geeta Dresses</h1>
         <div class="hero-rule"></div>
         <p id="landSub">Prop. Rajesh Agrawal · Pipariya</p>
@@ -281,6 +284,7 @@ body{margin:0}
       </div>
     </div>
     <div class="banner" id="banner"></div>
+    <div class="promo-rail" id="promoRail" hidden></div>
     <div class="land">
       <div class="trustrow" id="trustrow"></div>
       <div>
@@ -346,6 +350,13 @@ function applyRemoteConfig(config){
   if(config.gstin) SHOP.gstin=config.gstin;
   if(config.cancel_window_hours!=null) CANCEL_WINDOW_HOURS = Number(config.cancel_window_hours)||CANCEL_WINDOW_HOURS;
   if(config.issue_report_window_hours!=null) ISSUE_WINDOW_HOURS = Number(config.issue_report_window_hours)||ISSUE_WINDOW_HOURS;
+  if(config.max_delivery_km!=null) MAX_DELIVERY_KM = Number(config.max_delivery_km)||MAX_DELIVERY_KM;
+  const banners=[config.banner_1,config.banner_2,config.banner_3].filter(Boolean);
+  const rail=document.getElementById("promoRail");
+  if(rail){
+    if(banners.length){ rail.innerHTML=banners.map(b=>`<img src="${b}" alt="Offer">`).join(""); rail.hidden=false; }
+    else rail.hidden=true;
+  }
 }
 const STORE_KEY = "gd_demo_v3";
 /* ================= Real backend (Google Sheet via Apps Script Web App) ================= */
@@ -417,8 +428,9 @@ en:{
   err_village:"Please select your village so we can confirm delivery.", err_agree:"Please accept the return policy to continue.",
   err_stock:(n,s,q)=>`${n} (size ${s}) has only ${q} left — please update your bag.`,
   pay_title:a=>`Pay ₹${a} by UPI`, order_id:"Order ID", copy:"Copy", scan_hint:"Scan with any UPI app. The order ID is pre-filled in the payment note.", open_upi:"Paying from this phone? Open UPI app",
-  utr_label:"12-digit UTR / UPI reference no. (shown in your UPI app after paying)", utr_err:"UTR is the 12-digit number in your UPI app's payment details.",
-  confirm_paid:"I've paid — confirm order", back_btn:"Back",
+  utr_label:"12-digit UTR / UPI reference no. (optional — shown in your UPI app after paying)", utr_err:"UTR is the 12-digit number in your UPI app's payment details.",
+  screenshot_label:"Payment screenshot (optional, helps us confirm faster)",
+  confirm_paid:"I've paid — confirm order", back_btn:"Back", placing:"Placing order…",
   order_placed:"Order placed", utr_note:u=>`UTR ${u} received. We'll confirm on WhatsApp once the payment is matched.`, cod_note:a=>`Cash on delivery · keep ₹${a} ready.`,
   email_sent:e=>`Confirmation email sent to ${e}`, screenshot:"Screenshot this page, or find it anytime under My Orders.", keep_browsing:"Keep browsing",
   orders_title:"My Orders", lk_ph:"Your mobile number", find:"Find", no_orders_yet:"No orders yet.", ask_mobile:"Enter the mobile number used at checkout.",
@@ -468,8 +480,9 @@ hi:{
   err_village:"डिलीवरी कन्फर्म करने के लिए अपना गांव चुनें।", err_agree:"आगे बढ़ने के लिए रिटर्न पॉलिसी स्वीकार करें।",
   err_stock:(n,s,q)=>`${n} (साइज ${s}) में सिर्फ ${q} बचे हैं — कृपया बैग अपडेट करें।`,
   pay_title:a=>`UPI से ₹${a} पे करें`, order_id:"ऑर्डर ID", copy:"कॉपी", scan_hint:"किसी भी UPI ऐप से स्कैन करें। पेमेंट नोट में ऑर्डर ID पहले से भरा है।", open_upi:"इसी फोन से पे कर रहे हैं? UPI ऐप खोलें",
-  utr_label:"12 डिजिट UTR / UPI रेफरेंस नंबर (पेमेंट के बाद UPI ऐप में दिखता है)", utr_err:"UTR आपके UPI ऐप की पेमेंट डिटेल में दिखने वाला 12 डिजिट नंबर है।",
-  confirm_paid:"पेमेंट कर दिया — ऑर्डर कन्फर्म करें", back_btn:"बैक",
+  utr_label:"12 डिजिट UTR / UPI रेफरेंस नंबर (वैकल्पिक — पेमेंट के बाद UPI ऐप में दिखता है)", utr_err:"UTR आपके UPI ऐप की पेमेंट डिटेल में दिखने वाला 12 डिजिट नंबर है।",
+  screenshot_label:"पेमेंट स्क्रीनशॉट (वैकल्पिक, जल्दी कन्फर्म करने में मदद करता है)",
+  confirm_paid:"पेमेंट कर दिया — ऑर्डर कन्फर्म करें", back_btn:"बैक", placing:"ऑर्डर हो रहा है…",
   order_placed:"ऑर्डर प्लेस हो गया", utr_note:u=>`UTR ${u} मिल गया है। पेमेंट मैच होते ही व्हाट्सएप पर कन्फर्म करेंगे।`, cod_note:a=>`कैश ऑन डिलीवरी · ₹${a} तैयार रखें।`,
   email_sent:e=>`कन्फर्मेशन ईमेल ${e} पर भेजा गया`, screenshot:"इस पेज का स्क्रीनशॉट लें, या My Orders में कभी भी देखें।", keep_browsing:"शॉपिंग जारी रखें",
   orders_title:"मेरे ऑर्डर", lk_ph:"आपका मोबाइल नंबर", find:"ढूंढें", no_orders_yet:"अभी कोई ऑर्डर नहीं है।", ask_mobile:"चेकआउट में डाला गया मोबाइल नंबर डालें।",
@@ -488,7 +501,7 @@ let LANG = "hi";
 const t = k => { const v=(T[LANG]&&T[LANG][k]!==undefined)?T[LANG][k]:T.en[k]; return v; };
 function applyStaticLabels(){
   document.querySelectorAll("[data-k]").forEach(el=>{ el.textContent = t(el.dataset.k); });
-  $("#demoTag").textContent=t("demo_tag"); $("#landSub").textContent=t("sub");
+  $("#landSub").textContent=t("sub");
   $("#searchInput").placeholder=t("search_ph"); $("#banner").textContent=t("banner");
   $("#qcLabel").textContent=t("quick_shop"); $("#openPrivacy").textContent=t("privacy_link");
   $("#feedBackLbl").textContent=t("back"); $("#bagLbl").textContent=t("nav_bag");
@@ -515,6 +528,30 @@ const pName = p => LANG==="hi" ? (p.nameHi||PRODUCT_NAME_HI[p.id]||p.name) : p.n
 
 /* Real build: photo links come from a Google Sheet. Drive share links are converted to direct image URLs. */
 function driveImg(url){ const m=String(url).match(/(?:\/d\/|id=)([\w-]{20,})/); return m?`https://drive.google.com/thumbnail?id=${m[1]}&sz=w1200`:url; }
+
+/* Resizes/compresses an uploaded image file to a small JPEG data URL before sending it to
+   the backend — a full-resolution phone photo easily exceeds Google Sheets' ~50,000-char-
+   per-cell limit when base64-encoded; this keeps it well under that for both issue photos
+   and payment screenshots. */
+function resizeImageFile_(file, maxDim=900, quality=0.6){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    const reader=new FileReader();
+    reader.onerror=reject;
+    reader.onload=()=>{
+      img.onerror=reject;
+      img.onload=()=>{
+        let w=img.width,h=img.height;
+        if(w>maxDim||h>maxDim){ const scale=maxDim/Math.max(w,h); w=Math.round(w*scale); h=Math.round(h*scale); }
+        const canvas=document.createElement("canvas"); canvas.width=w; canvas.height=h;
+        canvas.getContext("2d").drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL("image/jpeg",quality));
+      };
+      img.src=reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 /* ================= Placeholder garment photos (SVG) ================= */
 const SHAPES = {
@@ -595,6 +632,9 @@ const GST_RATE = p => p<=1000 ? 5 : 12; // illustrative only — confirm actual 
 /* tier: 'same' = same-day (Pipariya town, 4 PM cutoff) · 'next' = next-day · 'next2' = next-to-next-day · 'other' = not yet covered */
 const SHOP_LOC = {lat:22.760, lng:78.357}; // approx Pipariya — set your exact shop location for live
 const DEFAULT_ZONE_RADIUS_KM = 4.5; // same-day delivery radius around SHOP_LOC; owner-editable via S.config.zone.radiusKm
+let MAX_DELIVERY_KM = 60; // "use my location" sanity cap — beyond this the nearest configured village is almost
+                          // certainly wrong (e.g. someone testing from another city), so we refuse to guess instead
+                          // of silently picking a random nearby village. Owner-editable via config.max_delivery_km.
 /* Seeded defaults only — the live, owner-editable copy lives in S.config.villages (see seed()/config below). */
 const DEFAULT_VILLAGES = [
   {id:"pipariya-town", name:"Pipariya Town", nameHi:"पिपरिया टाउन", lat:22.760, lng:78.357, tier:"same"},
@@ -615,6 +655,22 @@ let S = {votes:{}, cart:[], orders:[], baseVotes:{}, stock:{}, lang:"hi", config
 let CANCEL_WINDOW_HOURS = 6, ISSUE_WINDOW_HOURS = 12;
 let POLICY_REMOTE = null; // {key:value} from the Policies tab, once loaded — null means "use hardcoded T.en/T.hi copy"
 function loadLocal(){ try{ const r=localStorage.getItem(STORE_KEY); if(r) S=Object.assign(S,JSON.parse(r)); }catch(e){} LANG=S.lang||"hi"; seed(); }
+/* First-ever visit: ask Hindi/English directly instead of silently defaulting to Hindi.
+   Resolves immediately if the customer already chose a language before (S.langChosen). */
+function askLangIfNeeded(){
+  return new Promise(resolve=>{
+    if(S.langChosen){ resolve(); return; }
+    $("#layer").innerHTML=`<div class="scrim" id="langScrim" style="background:var(--bg)"></div>
+      <div class="sheet" style="position:absolute;inset:0;border-radius:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;z-index:30">
+        <h2 style="margin:0">भाषा चुनें · Choose language</h2>
+        <button class="cta" id="langHi" style="width:200px;font-size:17px">हिंदी</button>
+        <button class="cta" id="langEn" style="width:200px;font-size:17px;background:var(--chip);color:var(--fg)">English</button>
+      </div>`;
+    const pick=l=>{ LANG=l; S.langChosen=true; save(); $("#layer").innerHTML=""; resolve(); };
+    $("#langHi").onclick=()=>pick("hi");
+    $("#langEn").onclick=()=>pick("en");
+  });
+}
 function save(){ S.lang=LANG; try{ localStorage.setItem(STORE_KEY, JSON.stringify(S)); }catch(e){} }
 function fillPolicyTemplate(str, vals){ return String(str||"").replace(/\{(\w+)\}/g, (m,k)=> (vals && vals[k]!=null) ? vals[k] : m); }
 /* Merges Policies-tab copy into T.en/T.hi so every existing t("...") call picks it up automatically. */
@@ -855,8 +911,8 @@ $("#feed").onclick=e=>{
 };
 
 /* ================= Sheets ================= */
-function sheet(html){ $("#layer").innerHTML=`<div class="scrim" id="scrim"></div><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div>`; $("#scrim").onclick=closeSheet; }
-function closeSheet(){ $("#layer").innerHTML=""; }
+function sheet(html){ $("#layer").innerHTML=`<div class="scrim" id="scrim"></div><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div>`; $("#scrim").onclick=closeSheet; document.body.classList.add("sheet-open"); }
+function closeSheet(){ $("#layer").innerHTML=""; document.body.classList.remove("sheet-open"); }
 function policyHtml(){
   // Prefer the owner-editable Policies-tab copy once loaded; fall back to this hardcoded text
   // if the API hasn't loaded (not deployed yet / unreachable) or that key is missing.
@@ -1010,7 +1066,9 @@ function openCheckout(){
         return;
       }
       const near=nearestVillage(loc);
-      if(near){ vSel.value=near.id; updEta(); toast((LANG==="hi"?"नजदीकी गांव: ":"Nearest match: ")+villageName(near)); }
+      const nearDist=near?haversineKm(loc,near):Infinity;
+      if(near && nearDist<=MAX_DELIVERY_KM){ vSel.value=near.id; updEta(); toast((LANG==="hi"?"नजदीकी गांव: ":"Nearest match: ")+villageName(near)); }
+      else{ $("#eta").className="eta bad"; $("#eta").textContent = LANG==="hi" ? "आपकी लोकेशन हमारे डिलीवरी क्षेत्र से बाहर लग रही है — कृपया गांव खुद चुनें।" : "Your location looks outside our delivery area — please pick your village manually."; }
     }, ()=>{ $("#eta").className="eta bad"; $("#eta").textContent=t("loc_denied"); }, {timeout:6000});
   };
   const payUI=()=>{
@@ -1020,8 +1078,10 @@ function openCheckout(){
   };
   $("#codLink").onclick=()=>{draft.mode=draft.mode==="UPI"?"COD":"UPI";payUI()};
   payUI();
+  let ckSubmitting=false;
   $("#ck").onsubmit=e=>{
     e.preventDefault();
+    if(ckSubmitting) return;
     Object.assign(draft,{name:$("#f-name").value.trim(),phone:$("#f-phone").value.trim(),email:$("#f-email").value.trim(),addr:$("#f-addr").value.trim(),villageId:vSel.value});
     if(!draft.name||!/^\d{10}$/.test(draft.phone.replace(/\D/g,"").slice(-10))||!draft.addr){$("#ckErr").textContent=t("err_fill");return}
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email)){$("#ckErr").textContent=t("err_email");return}
@@ -1029,7 +1089,9 @@ function openCheckout(){
     if(!$("#f-agree").checked){$("#ckErr").textContent=t("err_agree");return}
     for(const c of S.cart){ if(c.qty>stockFor(c.id,c.size)){ $("#ckErr").textContent=t("err_stock")(pName(byId(c.id)),c.size,stockFor(c.id,c.size)); return; } }
     const order={id:newOrderId(),at:new Date().toISOString(),name:draft.name,phone:draft.phone,email:draft.email,villageId:draft.villageId,addr:draft.addr,items:S.cart.map(c=>({...c})),amount:cartTotal(),mode:draft.mode,utr:"",status:draft.mode==="COD"?"COD":"Awaiting UTR",stage:"Booked"};
-    draft.mode==="UPI"?openUpi(order):placeOrder(order);
+    if(draft.mode==="UPI"){ openUpi(order); return; }
+    ckSubmitting=true; $("#ckSubmit").disabled=true; $("#ckSubmit").textContent=t("placing");
+    placeOrder(order).finally(()=>{ckSubmitting=false;});
   };
 }
 function openUpi(order){
@@ -1038,21 +1100,37 @@ function openUpi(order){
     <div class="upi-box">
       <div>${t("order_id")} <span class="oid" id="oid">${order.id}</span> <button class="copy" id="cpy">${t("copy")}</button></div>
       <div id="qr" aria-label="UPI QR code"></div>
-      <small style="color:var(--muted)">${t("scan_hint")}<br>Demo UPI ID: ${SHOP.upiId}</small>
-      <a href="${link}" class="copy">${t("open_upi")}</a>
+      <div class="pay-to" style="font-size:17px;font-weight:700;margin:8px 0 2px">${rs(order.amount)} <span style="font-weight:500;color:var(--muted);font-size:14px">${LANG==="hi"?"को भेजें":"to"}</span></div>
+      <div style="font-size:16px;font-weight:700;letter-spacing:.01em">${SHOP.upiId}</div>
+      <small style="color:var(--muted)">${t("scan_hint")}</small>
+      <a href="${link}" class="copy" style="font-size:16px;font-weight:700;padding:13px">${t("open_upi")}</a>
     </div>
     <form id="utrF" style="margin-top:12px">
       <label>${t("utr_label")}<input id="f-utr" inputmode="numeric" maxlength="12" placeholder="e.g. 627812345671"></label>
       <div class="err" id="utrErr"></div>
-      <button class="cta" type="submit">${t("confirm_paid")}</button>
+      <label>${t("screenshot_label")}<input id="f-shot" type="file" accept="image/*"></label>
+      <div id="shotPreview"></div>
+      <button class="cta" type="submit" id="confirmPaidBtn">${t("confirm_paid")}</button>
       <button class="cta" type="button" id="backCk" style="background:var(--chip);color:var(--fg)">${t("back_btn")}</button>
     </form>`);
   try{ new QRCode($("#qr"),{text:link,width:180,height:180,correctLevel:QRCode.CorrectLevel.M}); }catch(e){ $("#qr").textContent=link; }
   $("#cpy").onclick=()=>{navigator.clipboard?.writeText(order.id).then(()=>toast(LANG==="hi"?"ऑर्डर ID कॉपी हुई":"Order ID copied")).catch(()=>{const r=document.createRange();r.selectNode($("#oid"));getSelection().removeAllRanges();getSelection().addRange(r)})};
   $("#backCk").onclick=openCheckout;
-  $("#utrF").onsubmit=e=>{e.preventDefault();const u=$("#f-utr").value.trim();
-    if(!/^\d{12}$/.test(u)){$("#utrErr").textContent=t("utr_err");return}
-    order.utr=u;order.status="Pending check";placeOrder(order)};
+  let shotData="";
+  $("#f-shot").onchange=async e=>{
+    const f=e.target.files[0]; if(!f) return;
+    try{ shotData=await resizeImageFile_(f); $("#shotPreview").innerHTML=`<img src="${shotData}" style="max-width:120px;border-radius:8px;margin-top:6px">`; }
+    catch(err){ console.warn("screenshot resize failed",err); }
+  };
+  let submitting=false;
+  $("#utrF").onsubmit=e=>{e.preventDefault();
+    if(submitting) return;
+    const u=$("#f-utr").value.trim();
+    if(u && !/^\d{12}$/.test(u)){$("#utrErr").textContent=t("utr_err");return}
+    submitting=true; $("#confirmPaidBtn").disabled=true; $("#confirmPaidBtn").textContent=t("placing");
+    order.utr=u;order.payment_screenshot=shotData;order.status="Pending check";
+    placeOrder(order).finally(()=>{submitting=false;});
+  };
 }
 function proformaText(order){
   const v=villageById(order.villageId);
@@ -1092,7 +1170,7 @@ async function placeOrder(order){
     try{
       const resp = await apiPost("placeOrder", {
         name:order.name, phone:order.phone, email:order.email, address:order.addr, village_id:order.villageId,
-        payment_mode:order.mode, amount:order.amount, utr:order.utr||"",
+        payment_mode:order.mode, amount:order.amount, utr:order.utr||"", payment_screenshot:order.payment_screenshot||"",
         items: order.items.map(c=>({product_id:c.id, size:c.size, qty:c.qty, unit_price:byId(c.id).price}))
       });
       if(resp.order_id) order.id = resp.order_id;
@@ -1226,7 +1304,7 @@ function wireOrderCards(){
         const note=card.querySelector('[data-role="issuenote"]').value.trim();
         const files=card.querySelector('[data-role="issuephotos"]').files;
         if(!files.length){ card.querySelector('[data-role="issueErr"]').textContent=t("need_photo"); return; }
-        const readers=[...files].slice(0,3).map(f=>new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(f)}));
+        const readers=[...files].slice(0,3).map(f=>resizeImageFile_(f).catch(()=>new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(f)})));
         Promise.all(readers).then(async photos=>{
           if(apiConfigured()){
             try{
@@ -1252,6 +1330,7 @@ function wireOrderCards(){
   loadingEl.id="bootLoading";
   loadingEl.style.cssText="position:absolute;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--muted);font-size:14px";
   loadingEl.textContent = LANG==="hi" ? "लोड हो रहा है…" : "Loading…";
+  await askLangIfNeeded();
   $("#app").appendChild(loadingEl);
   await loadFromApi();
   loadingEl.remove();
