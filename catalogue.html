@@ -1,0 +1,1251 @@
+<title>Geeta Dresses Catalogue</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Yatra+One&family=Mukta:wght@400;500;600;700;800&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+/* Layout: phone-frame app, Pipariya-only. Home (search + circular quick-cats + category grid) → sub-category step → vertical reel feed → My Orders → bottom sheets.
+   Tabbar + cart strip persist across every customer screen, including the feed. A search icon on the feed/orders headers opens a reusable search sheet.
+   Geofencing: village picker (primary) + "use my location" (center+radius same-day zone check first, then Haversine distance → nearest village as fallback), no pincodes.
+   Hindi/English toggle throughout. Owner/ops console lives in the separate owner.html, sharing this page's localStorage (STORE_KEY) — see S.config for owner-editable delivery rules. */
+:root{
+  --wine:#6a1430; --rose:#a84766; --gold:#c08a2e; --marigold:#c08a2e; --madder:#ab3326; --leaf:#2f7d4f; --teal:#1f8f82;
+  --cream:#fbf4ec;
+  --bg:#faf5ef; --surface:#fffdfb; --fg:#2a1a22; --muted:#7a6a6f; --line:#ece0d4; --chip:#f6ebdd;
+  --sheet:#fffdfb; --overlay:rgba(24,8,14,.6);
+  --display:"Yatra One","Mukta",Georgia,serif; --body:"Mukta",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#191216; --surface:#251a1f; --fg:#f6ece7; --muted:#c3aeb4; --line:#3d2b31; --chip:#32232a; --sheet:#251a1f; --teal:#3fd6c8; --gold:#e0b357; --marigold:#e0b357; color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#191216; --surface:#251a1f; --fg:#f6ece7; --muted:#c3aeb4; --line:#3d2b31; --chip:#32232a; --sheet:#251a1f; --teal:#3fd6c8; --gold:#e0b357; --marigold:#e0b357; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.45;overflow:hidden}
+*{box-sizing:border-box}
+button{font:inherit;cursor:pointer;color:inherit}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--marigold);outline-offset:2px}
+#app{height:100%;max-width:480px;margin:0 auto;position:relative;overflow:hidden;background:var(--bg);box-shadow:0 0 0 1px var(--line)}
+.view{position:absolute;inset:0;overflow-y:auto}
+.demo-tag{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;background:var(--chip);border:1px solid var(--gold);color:var(--wine);padding:3px 10px;border-radius:99px;font-weight:700}
+a{color:#fff}
+
+/* Hero / home */
+.hero{background:
+    radial-gradient(120% 140% at 100% 0%, rgba(192,138,46,.35), transparent 55%),
+    linear-gradient(160deg,var(--wine) 0%,#4a0f22 100%);
+  padding:16px 16px 48px;border-radius:0 0 28px 28px;color:#fff;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;background:
+    repeating-linear-gradient(115deg, rgba(255,255,255,.035) 0 2px, transparent 2px 26px);
+  pointer-events:none}
+.hero-motif{position:absolute;right:-18px;top:-10px;width:150px;height:150px;opacity:.16;pointer-events:none}
+.hero-rule{width:46px;height:2px;background:linear-gradient(90deg,var(--gold),transparent);margin-top:10px;border-radius:2px}
+.hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.langtog{display:flex;border:1px solid rgba(255,255,255,.5);border-radius:99px;overflow:hidden;font-size:12px;font-weight:700}
+.langtog button{padding:5px 10px;background:none;border:0;color:#fff;opacity:.65}
+.langtog button.on{background:#fff;color:var(--wine);opacity:1}
+.owner-btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 10px;font-size:13px;white-space:nowrap}
+.hero .owner-btn{border-color:rgba(255,255,255,.4);background:rgba(255,255,255,.14);color:#fff;backdrop-filter:blur(4px);text-decoration:none;display:inline-block}
+.brand{margin-top:10px}
+.brand h1{font-family:var(--display);font-weight:400;font-size:32px;line-height:1.1;margin:0;letter-spacing:.01em;text-shadow:0 2px 10px rgba(0,0,0,.25)}
+.brand p{margin:7px 0 0;opacity:.85;font-size:13px;letter-spacing:.02em}
+.searchbar{position:relative;margin-top:16px}
+.searchbar svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:18px;height:18px;stroke:var(--muted);fill:none;stroke-width:2}
+.searchbar input{width:100%;border:0;border-radius:12px;padding:12px 14px 12px 38px;font-size:14px;box-shadow:0 6px 18px rgba(30,5,15,.18)}
+.searchresults{position:absolute;left:0;right:0;top:calc(100% + 6px);background:var(--surface);color:var(--fg);border-radius:12px;box-shadow:0 10px 24px rgba(0,0,0,.25);z-index:9;max-height:260px;overflow-y:auto}
+.searchresults button{display:flex;gap:10px;align-items:center;width:100%;padding:8px 10px;border:0;background:none;text-align:left;border-bottom:1px solid var(--line)}
+.searchresults img{width:38px;height:48px;object-fit:cover;border-radius:6px}
+.searchresults .sr-meta{font-size:13px;min-width:0}
+.searchresults .sr-meta div:first-child{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.banner{margin:-32px 16px 0;background:linear-gradient(90deg,#1c3b2e,#2f7d4f);color:#fff;border-radius:14px;padding:11px 14px;font-size:13px;font-weight:600;box-shadow:0 10px 22px rgba(20,60,40,.26);border:1px solid rgba(255,255,255,.14);display:flex;align-items:center;gap:8px;position:relative;z-index:3}
+
+.quickcats{display:flex;gap:16px;overflow-x:auto;padding:4px 2px}
+.qc{display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:0;flex:0 0 auto}
+.qc .ring{width:60px;height:60px;border-radius:50%;padding:2.5px;background:linear-gradient(135deg,var(--gold),var(--wine));box-shadow:0 3px 8px rgba(40,10,25,.15)}
+.qc .ring>img{border:2px solid var(--surface)}
+.qc img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.qc span{font-size:12px;font-weight:600}
+
+.land{padding:16px 16px 190px;display:flex;flex-direction:column;gap:20px}
+.sec-label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 8px}
+.cats{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.cat{border-radius:18px;overflow:hidden;background:var(--surface);padding:0;text-align:left;position:relative;box-shadow:0 6px 18px rgba(40,10,25,.16);aspect-ratio:4/3;display:block}
+.cat img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s ease}
+.cat:active img{transform:scale(1.04)}
+.cat[aria-pressed="true"]{box-shadow:0 0 0 2.5px var(--gold), 0 6px 18px rgba(40,10,25,.16)}
+.catlabel{position:absolute;left:0;right:0;bottom:0;padding:26px 12px 10px;background:linear-gradient(transparent,rgba(20,6,12,.8));color:#fff;display:flex;justify-content:space-between;align-items:flex-end;gap:6px}
+.catlabel b{font-weight:700;font-size:14px;text-shadow:0 1px 4px rgba(0,0,0,.4)}
+.catlabel small{font-size:10.5px;background:rgba(255,255,255,.2);backdrop-filter:blur(2px);padding:2px 8px;border-radius:99px;white-space:nowrap;font-weight:600}
+.tagrow{position:absolute;top:9px;left:9px;display:flex;gap:4px;z-index:2}
+.reel .tagrow{top:calc(64px + env(safe-area-inset-top,0px));left:12px}
+.reel .offribbon{top:calc(64px + env(safe-area-inset-top,0px))}
+.tag-pill{font-size:9.5px;font-weight:800;padding:3px 8px;border-radius:99px;letter-spacing:.04em;text-transform:uppercase}
+.tag-best{background:var(--wine);color:#fff}
+.tag-new{background:var(--teal);color:#fff}
+.offribbon{position:absolute;top:9px;right:0;background:var(--gold);color:#fff;font-size:11px;font-weight:800;padding:3px 10px 3px 9px;border-radius:7px 0 0 7px;box-shadow:-2px 2px 8px rgba(0,0,0,.18)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);background:var(--chip);border-radius:99px;padding:6px 14px;font-size:14px}
+.chip[aria-pressed="true"]{background:var(--wine);border-color:var(--wine);color:#fff}
+.cta-bar{position:absolute;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,var(--bg) 30%)}
+.cta{width:100%;border:0;border-radius:14px;padding:14px;background:linear-gradient(135deg,var(--wine),var(--rose));color:#fff;font-weight:700;font-size:16px;letter-spacing:.01em;box-shadow:0 6px 16px rgba(106,20,48,.32)}
+.cta:disabled{opacity:.4;cursor:default;box-shadow:none}
+.cta.alt{background:linear-gradient(135deg,var(--gold),#e0b357);color:#3a2306;box-shadow:0 6px 16px rgba(192,138,46,.32)}
+.cta.ghost{background:var(--chip);color:var(--fg);box-shadow:none}
+.foot-link{text-align:center;font-size:13px;color:var(--muted);text-decoration:underline;background:none;border:0;padding:6px}
+.trustrow{display:flex;gap:8px;flex-wrap:wrap}
+.trust{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:7px 10px}
+.trust svg{width:15px;height:15px;stroke:var(--leaf);fill:none;stroke-width:2.2}
+
+/* Bottom chrome: tabbar + cart strip + feed back FAB */
+.tabbar{position:absolute;left:0;right:0;bottom:0;z-index:15;display:flex;background:var(--surface);border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px))}
+.tabbar button{flex:1;background:none;border:0;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--muted);padding:6px 2px;border-radius:10px;position:relative}
+.tabbar button svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tabbar button.active{color:var(--rose)}
+.tabbar .badge{position:absolute;top:2px;right:22%;background:var(--marigold);color:#2a1d00;font-size:10px;font-weight:700;border-radius:99px;min-width:15px;height:15px;display:flex;align-items:center;justify-content:center;padding:0 3px}
+.cartstrip{position:absolute;left:8px;right:8px;z-index:16;display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,var(--wine),var(--rose));color:#fff;border-radius:14px;padding:10px 12px;box-shadow:0 6px 18px rgba(30,5,15,.3)}
+.cartstrip b{font-size:15px}
+.cartstrip span{opacity:.85;font-size:12px}
+.cartstrip button{margin-left:auto;background:#fff;color:var(--wine);border:0;border-radius:10px;padding:8px 14px;font-weight:700;font-size:13px}
+.fab-back{position:absolute;left:12px;z-index:16;background:var(--marigold);color:#2a1d00;border:0;border-radius:99px;padding:10px 16px 10px 12px;font-weight:700;display:flex;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+
+/* Feed */
+.feed{position:absolute;inset:0;overflow-y:auto;scroll-snap-type:y mandatory;background:#000;overscroll-behavior:contain}
+.reel{height:100%;scroll-snap-align:start;scroll-snap-stop:always;position:relative;color:#fff}
+.photos{display:flex;height:100%;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
+.photos::-webkit-scrollbar{display:none}
+.photos img{flex:0 0 100%;width:100%;height:100%;object-fit:cover;scroll-snap-align:center}
+.dots{position:absolute;top:calc(58px + env(safe-area-inset-top,0px));left:0;right:0;display:flex;justify-content:center;gap:5px;pointer-events:none}
+.dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.45)}
+.dots i.on{background:#fff;width:16px;border-radius:4px}
+.topbar{position:absolute;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;gap:8px;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 10px;background:linear-gradient(rgba(0,0,0,.55),transparent);color:#fff}
+.topbar button{background:rgba(255,255,255,.16);border:0;border-radius:99px;padding:6px 12px;font-size:14px;color:#fff;backdrop-filter:blur(6px)}
+.topbar .crumb{flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cart-pill b{background:var(--marigold);color:#2a1d00;border-radius:99px;padding:0 6px;margin-left:4px;font-size:12px}
+.info{position:absolute;left:0;right:72px;bottom:0;padding:16px 16px calc(78px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,rgba(0,0,0,.75) 40%);pointer-events:none}
+/* The persistent tabbar (and, when the bag has items, the cart strip above it) sit over the
+   feed's bottom edge — push the caption and action rail up enough to clear them. */
+body.cart-chrome .info{padding-bottom:calc(142px + env(safe-area-inset-bottom,0px))}
+.info>*{pointer-events:auto}
+.info .sub{font-size:12px;letter-spacing:.06em;text-transform:uppercase;opacity:.8}
+.info h2{margin:2px 0 4px;font-size:21px;line-height:1.2}
+.price{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+.price .now{font-size:22px;font-weight:700}
+.price s{opacity:.7}
+.price .off{color:var(--marigold);font-weight:700}
+.info .hint{font-size:13px;opacity:.85;margin-top:4px}
+.stockline{font-size:12px;font-weight:700;margin-top:4px}
+.stockline.low{color:var(--marigold)}
+.stockline.out{color:#ff8a80}
+.rail{position:absolute;right:8px;bottom:calc(82px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px;align-items:center}
+body.cart-chrome .rail{bottom:calc(146px + env(safe-area-inset-bottom,0px))}
+.rbtn{background:none;border:0;display:flex;flex-direction:column;align-items:center;gap:2px;color:#fff;font-size:12px;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.rbtn .ic{width:46px;height:46px;border-radius:50%;background:rgba(0,0,0,.35);display:grid;place-items:center;backdrop-filter:blur(6px)}
+.rbtn svg{width:24px;height:24px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.rbtn.liked .ic{background:var(--madder)} .rbtn.liked svg{fill:#fff}
+.rbtn.disliked .ic{background:#555}
+.rbtn.bag .ic{background:var(--marigold)} .rbtn.bag svg{stroke:#2a1d00}
+.rbtn.share .ic{background:var(--teal)}
+.end{height:100%;scroll-snap-align:start;display:grid;place-items:center;text-align:center;color:#fff;padding:24px;background:linear-gradient(160deg,var(--wine),var(--rose))}
+.end h3{font-family:var(--display);font-weight:400;font-size:26px;margin:0 0 8px}
+
+/* Sheets */
+.scrim{position:absolute;inset:0;background:var(--overlay);z-index:20}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:88%;overflow-y:auto;background:var(--sheet);color:var(--fg);border-radius:18px 18px 0 0;z-index:21;padding:8px 16px calc(20px + env(safe-area-inset-bottom,0px));animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(30px);opacity:.6}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.sheet{animation:none}}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 10px}
+.sheet h3{margin:0 0 4px;font-size:19px}
+.sheet .x{float:right;border:0;background:var(--chip);border-radius:99px;width:32px;height:32px}
+.specs{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:12px 0;font-size:14px}
+.specs dt{color:var(--muted)} .specs dd{margin:0}
+.note{background:var(--chip);border-radius:12px;padding:10px 12px;font-size:14px}
+.qa{border-top:1px solid var(--line);padding:10px 0;font-size:14px}
+.qa b{display:block}
+.sizes{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 4px}
+.size{min-width:44px;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 10px;font-weight:600;position:relative}
+.size[aria-pressed="true"]{background:var(--wine);color:#fff;border-color:var(--wine)}
+.size[disabled]{opacity:.4;text-decoration:line-through;cursor:not-allowed}
+.sizehint{font-size:12px;color:var(--marigold);font-weight:600;min-height:1.2em;margin-bottom:10px}
+.share-row{display:flex;gap:8px;margin:10px 0}
+.share-row button{flex:1;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px}
+.share-row button.wa{background:#25d366;border-color:#25d366;color:#07310f}
+.line-item{display:grid;grid-template-columns:56px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.line-item img{width:56px;height:70px;object-fit:cover;border-radius:8px}
+.line-item .meta{min-width:0;font-size:14px}
+.line-item .meta div:first-child{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qty{display:flex;align-items:center;gap:6px}
+.qty button{width:28px;height:28px;border-radius:8px;border:1px solid var(--line);background:var(--surface)}
+.tot{display:flex;justify-content:space-between;padding:12px 0;font-weight:700;font-variant-numeric:tabular-nums}
+form{display:flex;flex-direction:column;gap:10px}
+label{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+input,select,textarea{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.villagewrap{display:flex;gap:8px}
+.villagewrap select{flex:1}
+.locbtn{border:1px solid var(--wine);background:var(--chip);color:var(--wine);border-radius:10px;padding:0 12px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.eta{border-radius:12px;padding:10px 12px;font-size:14px;border:1px dashed var(--line)}
+.eta.ok{border-color:var(--leaf);color:var(--leaf)} .eta.bad{border-color:var(--madder);color:var(--madder)} .eta.warn{border-color:var(--marigold);color:#8a5b00}
+.upi-pref{border:2px solid var(--wine);border-radius:12px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.upi-pref small{color:var(--leaf);font-weight:600}
+.upi-box{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;padding:12px;border:1px solid var(--line);border-radius:14px}
+#qr{background:#fff;padding:10px;border-radius:10px}
+#qr img,#qr canvas{display:block}
+.oid{font-family:ui-monospace,Menlo,monospace;font-weight:700;background:var(--chip);padding:4px 10px;border-radius:8px;letter-spacing:.04em}
+.copy{border:0;background:none;color:var(--wine);font-weight:600;font-size:13px}
+.done{text-align:center;padding:16px 0}
+.done .tick{width:64px;height:64px;border-radius:50%;background:var(--leaf);color:#fff;display:grid;place-items:center;margin:0 auto 10px;font-size:32px}
+.err{color:var(--madder);font-size:13px;min-height:1em}
+details.emailprev{border:1px solid var(--line);border-radius:12px;padding:8px 12px;text-align:left;margin-top:10px}
+details.emailprev summary{cursor:pointer;font-weight:600;font-size:13px}
+.emailbox{font-size:13px;margin-top:8px;background:var(--chip);border-radius:10px;padding:10px}
+.emailbox .hdr{color:var(--muted);margin-bottom:4px}
+.invoice{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--chip);border-radius:10px;padding:12px;white-space:pre-wrap;line-height:1.6;text-align:left}
+.agree{flex-direction:row;align-items:flex-start;gap:8px;font-size:13px;color:var(--fg)}
+.agree input{width:auto;margin-top:3px}
+.cod-link{border:0;background:none;color:var(--muted);font-size:13px;text-decoration:underline;padding:4px 0;align-self:center}
+.policy{font-size:13px;color:var(--muted);border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface)}
+.policy b{color:var(--fg)}
+
+/* My Orders */
+.orders-wrap{padding:16px 16px 190px;display:flex;flex-direction:column;gap:16px}
+.orders-wrap h2{margin:0;font-size:20px}
+.lookup{display:flex;gap:8px}
+.lookup input{flex:1}
+.lookup button{border:0;background:linear-gradient(135deg,var(--wine),var(--rose));color:#fff;border-radius:10px;padding:0 16px;font-weight:700}
+.order-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.order-card .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.order-card .top b{font-family:ui-monospace,Menlo,monospace}
+.stepper{display:flex;align-items:center;gap:0}
+.step{flex:1;text-align:center;font-size:11px;color:var(--muted);position:relative}
+.step .dot{width:14px;height:14px;border-radius:50%;background:var(--chip);border:2px solid var(--line);margin:0 auto 4px}
+.step.on .dot{background:var(--leaf);border-color:var(--leaf)}
+.step.now .dot{background:var(--marigold);border-color:var(--marigold)}
+.step::before{content:"";position:absolute;top:6px;left:-50%;width:100%;height:2px;background:var(--line);z-index:-1}
+.step:first-child::before{display:none}
+.step.on::before{background:var(--leaf)}
+.cancelled-banner{background:color-mix(in srgb,var(--madder) 14%,transparent);color:var(--madder);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:600}
+.otp-chip{display:inline-flex;align-items:center;gap:6px;background:var(--chip);border-radius:10px;padding:6px 10px;font-weight:700;font-family:ui-monospace,Menlo,monospace}
+.mini-btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600}
+.mini-btn.danger{color:var(--madder);border-color:var(--madder)}
+.inline-confirm{display:flex;gap:8px;align-items:center;font-size:13px;background:var(--chip);border-radius:10px;padding:8px 10px}
+.issue-form{display:flex;flex-direction:column;gap:8px;border-top:1px dashed var(--line);padding-top:10px}
+.radio-row{display:flex;gap:14px;font-size:13px}
+.radio-row label{flex-direction:row;align-items:center;gap:6px;color:var(--fg)}
+.radio-row input{width:auto}
+.thumbs{display:flex;gap:6px;flex-wrap:wrap}
+.thumbs img{width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.issue-pill{font-size:12px;font-weight:700;padding:2px 10px;border-radius:99px;display:inline-block}
+
+/* Shared status pills (used by customer order cards / issue status) */
+.pill{display:inline-block;border-radius:99px;padding:1px 8px;font-size:12px;font-weight:600}
+.p-ok{background:color-mix(in srgb,var(--leaf) 18%,transparent);color:var(--leaf)}
+.p-wait{background:color-mix(in srgb,var(--marigold) 25%,transparent);color:#8a5b00}
+.p-bad{background:color-mix(in srgb,var(--madder) 18%,transparent);color:var(--madder)}
+.p-cod{background:var(--chip);color:var(--fg)}
+:root[data-theme="dark"] .p-wait{color:var(--marigold)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .p-wait{color:var(--marigold)}}
+.step-head{display:flex;align-items:center;gap:10px}
+.step-head h2{margin:0;font-size:18px;flex:1;color:#fff}
+.step-head .owner-btn{padding:6px 12px}
+.step-dots{display:flex;gap:4px}.step-dots i{width:18px;height:4px;border-radius:2px;background:rgba(255,255,255,.3)}.step-dots i.on{background:var(--marigold)}
+.toast{position:absolute;left:50%;bottom:90px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:99px;font-size:14px;z-index:40;white-space:nowrap;max-width:88%;text-align:center}
+/* Search overlay (reused from feed/orders search icon) */
+.searchsheet-input{position:relative}
+</style>
+
+<div id="app">
+  <!-- Landing / Home -->
+  <section class="view" id="v-land">
+    <div class="hero">
+      <svg class="hero-motif" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 6C38 20 30 28 30 42c0 14 9 24 20 24s20-10 20-24c0-14-8-22-20-36z" fill="none" stroke="#fff" stroke-width="1.1"/><circle cx="50" cy="70" r="3" fill="#fff"/><path d="M20 66c10-4 20-2 30 4M80 66c-10-4-20-2-30 4" stroke="#fff" stroke-width="1" fill="none"/></svg>
+      <div class="hero-top">
+        <div class="langtog" id="langtog"><button data-l="hi">हिं</button><button data-l="en">EN</button></div>
+        <a class="owner-btn" href="owner.html">Shop owner</a>
+      </div>
+      <div class="brand">
+        <span class="demo-tag" id="demoTag">Demo catalogue</span>
+        <h1>Geeta Dresses</h1>
+        <div class="hero-rule"></div>
+        <p id="landSub">Prop. Rajesh Agrawal · Pipariya</p>
+      </div>
+      <div class="searchbar">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="searchInput" placeholder="">
+        <div class="searchresults" id="searchResults" hidden></div>
+      </div>
+    </div>
+    <div class="banner" id="banner"></div>
+    <div class="land">
+      <div class="trustrow" id="trustrow"></div>
+      <div>
+        <p class="sec-label" id="qcLabel"></p>
+        <div class="quickcats" id="quickcats"></div>
+      </div>
+      <div id="stepHead" class="step-head"></div>
+      <div class="cats" id="cats"></div>
+      <div class="policy" id="policyLand"></div>
+      <button class="foot-link" id="openPrivacy"></button>
+    </div>
+  </section>
+
+  <!-- Feed -->
+  <section class="view" id="v-feed" hidden>
+    <div class="topbar">
+      <button id="backLand" aria-label="Back">← <span id="feedBackLbl"></span></button>
+      <div class="crumb" id="crumb"></div>
+      <button id="openSearchFeed" aria-label="Search"><svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:#fff;fill:none;stroke-width:2.2;vertical-align:-3px"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></button>
+      <button class="cart-pill" id="openCart"><span id="bagLbl">Bag</span><b id="cartCount">0</b></button>
+    </div>
+    <div class="feed" id="feed"></div>
+    <button class="fab-back" id="fabBack" style="bottom:calc(76px + env(safe-area-inset-bottom,0px))" aria-label="Back"><span id="fabBackLbl">⟵ Back</span></button>
+  </section>
+
+  <!-- My Orders -->
+  <section class="view" id="v-orders" hidden>
+    <div class="orders-wrap">
+      <div style="display:flex;align-items:center;gap:8px">
+        <h2 id="ordersTitle" style="flex:1">My Orders</h2>
+        <button class="owner-btn" id="openSearchOrders" aria-label="Search"><svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2.2;vertical-align:-3px"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></button>
+      </div>
+      <form class="lookup" id="lookupForm">
+        <input id="lk-phone" inputmode="tel" autocomplete="tel">
+        <button type="submit" id="findBtn">Find</button>
+      </form>
+      <div id="ordersList"></div>
+    </div>
+  </section>
+
+  <!-- Persistent bottom bar (all customer screens) -->
+  <div class="cartstrip" id="cartStrip" hidden></div>
+  <nav class="tabbar" id="tabbar">
+    <button data-tab="land" aria-label="Home"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 9v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9"/></svg><span data-k="nav_home">Home</span></button>
+    <button data-tab="orders" aria-label="My Orders"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg><span data-k="nav_orders">My Orders</span></button>
+    <button data-tab="bag" aria-label="Bag"><svg viewBox="0 0 24 24"><path d="M6 7h12l1 14H5L6 7z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg><span data-k="nav_bag">Bag</span><span class="badge" id="tabBadge" hidden>0</span></button>
+  </nav>
+
+  <div id="layer"></div>
+</div>
+
+<script>
+/* ================= Config ================= */
+let SHOP = { name:"Geeta Dresses", owner:"Rajesh Agrawal", upiId:"geetadresses@upi", upiName:"Geeta Dresses", phone:"+91 98xxx xxxxx", email:"geetadresses.pipariya@gmail.com", gstin:"23AAAAA0000A1Z5 (sample, pending registration)" };
+function applyRemoteConfig(config){
+  if(!config) return;
+  if(config.shop_name) SHOP.name=config.shop_name;
+  if(config.owner_name) SHOP.owner=config.owner_name;
+  if(config.upi_id) SHOP.upiId=config.upi_id;
+  if(config.upi_name) SHOP.upiName=config.upi_name;
+  if(config.phone) SHOP.phone=config.phone;
+  if(config.email) SHOP.email=config.email;
+  if(config.gstin) SHOP.gstin=config.gstin;
+  if(config.cancel_window_hours!=null) CANCEL_WINDOW_HOURS = Number(config.cancel_window_hours)||CANCEL_WINDOW_HOURS;
+  if(config.issue_report_window_hours!=null) ISSUE_WINDOW_HOURS = Number(config.issue_report_window_hours)||ISSUE_WINDOW_HOURS;
+}
+const STORE_KEY = "gd_demo_v3";
+/* ================= Real backend (Google Sheet via Apps Script Web App) ================= */
+/* Paste the /exec URL from Deploy > New deployment (type "Web app") here. Same placeholder
+   string in owner.html — a single find-replace fills both once you have deployed Code.gs. */
+const API_URL = "https://script.google.com/a/macros/rentomojo.com/s/AKfycbxSFITh2HaA8BOfuGsQFxwMbfBhtjzqS6IetJujjYH8NVrWeWMKDzDBrZ1IBlh78R9IvA/exec";
+function apiConfigured(){ return typeof API_URL==="string" && API_URL && !API_URL.includes("PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE"); }
+async function apiGetAll(){
+  const res = await fetch(API_URL + (API_URL.includes("?")?"&":"?") + "action=all");
+  const data = await res.json();
+  if(!data || data.ok===false) throw new Error((data && data.error) || "API error");
+  return data;
+}
+async function apiGetOrdersByPhone(phone){
+  const res = await fetch(API_URL + (API_URL.includes("?")?"&":"?") + "action=orders&phone=" + encodeURIComponent(phone));
+  const data = await res.json();
+  if(!data || data.ok===false) throw new Error((data && data.error) || "API error");
+  return data;
+}
+/* Apps Script Web Apps can't set custom CORS headers, and a JSON POST triggers a preflight
+   it can't answer — so we send text/plain and the server does JSON.parse(e.postData.contents). */
+async function apiPost(action, payload){
+  const res = await fetch(API_URL, { method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"}, body: JSON.stringify(Object.assign({action}, payload)) });
+  const data = await res.json();
+  if(!data || data.ok===false) throw new Error((data && data.error) || "API error");
+  return data;
+}
+const DEFAULT_CUTOFF_HOUR = 16; // 4 PM same-day cutoff default — owner-editable at runtime via S.config.cutoffHour
+
+/* ================= i18n (customer-facing app only; owner console stays English) ================= */
+const T = {
+en:{
+  demo_tag:"Demo catalogue", sub:"Prop. Rajesh Agrawal · Pipariya",
+  search_ph:"Search sarees, kurtis, shirts…",
+  banner:"🚚 Same-day delivery in Pipariya — order before 4 PM",
+  quick_shop:"Shop by category", see_items:n=>`See ${n} item${n>1?"s":""}`,
+  trust1:"Easy exchange", trust2:"Cash on delivery", trust3:"UPI accepted",
+  step_cat:"Choose a category", step_sub:" · pick type",
+  privacy_link:"Privacy & returns policy",
+  nav_home:"Home", nav_orders:"My Orders", nav_bag:"Bag",
+  back:"Back", crumb_all:"All items",
+  sold_out:"Sold out", only_left:n=>`Only ${n} left across sizes`, only_left_size:(n,s)=>`Only ${n} left in size ${s}`,
+  like:"Like", not_for_me:"Not for me", details:"Details", share:"Share", add:"Add",
+  end_title:"That's all for now", end_sub:"New stock is added every week at Geeta Dresses.", browse_other:"Browse other categories",
+  select_size:"Select size", pick_size_first:"Pick a size first.", code:"Code",
+  delivery_note:"Pipariya town: same-day (order before 4 PM). Nearby villages: next-day or next-to-next-day depending on distance.",
+  questions:"Questions from customers",
+  share_title:"Share this item", share_wa:"Share on WhatsApp", share_copy:"Copy link", share_hint:"Opens your item directly when the link is tapped.",
+  link_copied:"Link copied",
+  bag_empty:"Your bag is empty", bag_empty_sub:"Tap “Add” on any item you like.",
+  your_bag:"Your bag", total:"Total", continue_addr:"Continue to delivery details",
+  checkout_title:"Delivery details", full_name:"Full name", mobile:"Mobile (WhatsApp)", email:"Email (for your order confirmation)",
+  address:"House / street — nearest landmark", pick_village:"Your village / area", use_location:"Use my location", locating:"Locating…",
+  village_placeholder:"Select your village", village_other:"My village isn't listed",
+  loc_denied:"Couldn't get your location here — please pick your village from the list.",
+  eta_hint:"Pick your village to see the delivery promise.",
+  eta_same_ok:d=>`Same-day delivery — arriving today by ${d}`, eta_same_late:"Ordered after 4 PM — delivery tomorrow instead of today",
+  eta_next:d=>`Next-day delivery — by ${d}`, eta_next2:d=>`Delivery in 2 days — by ${d}`,
+  eta_unknown:"We'll confirm your delivery day on WhatsApp/call after booking.",
+  payment:"Payment", upi_main:"UPI · GPay, PhonePe, Paytm", upi_sub:"Faster dispatch", cod_main:"Cash on delivery", cod_sub:"Confirmed by phone before dispatch",
+  continue_pay:"Continue to pay", place_cod:"Place COD order", cant_pay_online:"Can't pay online?", pay_upi_instead:"Pay by UPI instead",
+  agree:"I understand items can't be returned except for size issue or manufacturing defect reported within 12 hours of delivery.",
+  err_fill:"Fill name, a 10-digit mobile number and address.", err_email:"Enter a valid email — we'll send your order confirmation there.",
+  err_village:"Please select your village so we can confirm delivery.", err_agree:"Please accept the return policy to continue.",
+  err_stock:(n,s,q)=>`${n} (size ${s}) has only ${q} left — please update your bag.`,
+  pay_title:a=>`Pay ₹${a} by UPI`, order_id:"Order ID", copy:"Copy", scan_hint:"Scan with any UPI app. The order ID is pre-filled in the payment note.", open_upi:"Paying from this phone? Open UPI app",
+  utr_label:"12-digit UTR / UPI reference no. (shown in your UPI app after paying)", utr_err:"UTR is the 12-digit number in your UPI app's payment details.",
+  confirm_paid:"I've paid — confirm order", back_btn:"Back",
+  order_placed:"Order placed", utr_note:u=>`UTR ${u} received. We'll confirm on WhatsApp once the payment is matched.`, cod_note:a=>`Cash on delivery · keep ₹${a} ready.`,
+  email_sent:e=>`Confirmation email sent to ${e}`, screenshot:"Screenshot this page, or find it anytime under My Orders.", keep_browsing:"Keep browsing",
+  orders_title:"My Orders", lk_ph:"Your mobile number", find:"Find", no_orders_yet:"No orders yet.", ask_mobile:"Enter the mobile number used at checkout.",
+  invalid_mobile:"Enter a valid 10-digit mobile number.", none_found:"No orders found for this number.",
+  booked:"Booked", dispatched:"Dispatched", delivered:"Delivered", cancelled:"Cancelled", cancelled_note:"Cancelled — stock has been released.",
+  otp_line:o=>`Delivery OTP (give this to the delivery person): `, proforma:"Proforma", invoice:"Tax invoice", cancel_order:"Cancel order",
+  cancel_q:"Cancel this order?", yes_cancel:"Yes, cancel", keep_it:"Keep it", cancelled_toast:"Order cancelled, stock released",
+  report_hdr:h=>`Report an issue — ${h}h left`, size_issue:"Size issue", mfg_defect:"Manufacturing defect", note_ph:"Describe the issue (optional)",
+  submit_report:"Submit report", need_photo:"Please attach at least one photo.", reported_toast:"Reported. We'll get back within 24–48 hrs.",
+  window_closed:"Reporting window closed.", under_review:"We'll get back to you within 24–48 hours.",
+  privacy_title:"Privacy & returns policy", privacy_collect_h:"What we collect", privacy_collect:"Your name, phone number, email, delivery address and (if you report an issue) photos of the item. This is used only to process and deliver your order, send order updates, and resolve exchange/refund requests. It is never sold.",
+  privacy_rights_h:"Your rights", privacy_rights:"You can ask us to delete your information at any time by contacting us below.",
+  privacy_contact_h:"Seller & grievance contact",
+},
+hi:{
+  demo_tag:"डेमो कैटलॉग", sub:"प्रोपराइटर राजेश अग्रवाल · पिपरिया",
+  search_ph:"साड़ी, कुर्ती, शर्ट सर्च करें…",
+  banner:"🚚 पिपरिया में आज ही डिलीवरी — शाम 4 बजे से पहले ऑर्डर करें",
+  quick_shop:"कैटेगरी से शॉप करें", see_items:n=>`${n} आइटम देखें`,
+  trust1:"आसान एक्सचेंज", trust2:"कैश ऑन डिलीवरी", trust3:"UPI स्वीकार",
+  step_cat:"कैटेगरी चुनें", step_sub:" · टाइप चुनें",
+  privacy_link:"प्राइवेसी और रिटर्न पॉलिसी",
+  nav_home:"होम", nav_orders:"मेरे ऑर्डर", nav_bag:"बैग",
+  back:"बैक", crumb_all:"सभी आइटम",
+  sold_out:"स्टॉक खत्म", only_left:n=>`सभी साइज मिलाकर सिर्फ ${n} बचे हैं`, only_left_size:(n,s)=>`साइज ${s} में सिर्फ ${n} बचे हैं`,
+  like:"पसंद", not_for_me:"पसंद नहीं", details:"डिटेल्स", share:"शेयर", add:"बैग में डालें",
+  end_title:"फिलहाल इतना ही", end_sub:"हर हफ्ते गीता ड्रेसेस में नया स्टॉक आता है।", browse_other:"दूसरी कैटेगरी देखें",
+  select_size:"साइज चुनें", pick_size_first:"पहले साइज चुनें।", code:"कोड",
+  delivery_note:"पिपरिया टाउन: आज ही डिलीवरी (शाम 4 बजे से पहले ऑर्डर करें)। आस-पास के गांव: दूरी के हिसाब से अगले दिन या उसके अगले दिन।",
+  questions:"कस्टमर के सवाल",
+  share_title:"यह आइटम शेयर करें", share_wa:"व्हाट्सएप पर शेयर करें", share_copy:"लिंक कॉपी करें", share_hint:"लिंक खोलते ही यह आइटम सीधे दिखेगा।",
+  link_copied:"लिंक कॉपी हो गया",
+  bag_empty:"आपका बैग खाली है", bag_empty_sub:"पसंद के आइटम पर “Add” दबाएं।",
+  your_bag:"आपका बैग", total:"टोटल", continue_addr:"डिलीवरी डिटेल्स भरें",
+  checkout_title:"डिलीवरी डिटेल्स", full_name:"पूरा नाम", mobile:"मोबाइल (व्हाट्सएप)", email:"ईमेल (ऑर्डर कन्फर्मेशन के लिए)",
+  address:"घर / गली — पास का लैंडमार्क", pick_village:"आपका गांव / एरिया", use_location:"मेरी लोकेशन यूज़ करें", locating:"लोकेशन ढूंढ रहे हैं…",
+  village_placeholder:"अपना गांव चुनें", village_other:"मेरा गांव लिस्ट में नहीं है",
+  loc_denied:"यहां लोकेशन नहीं मिल पाई — कृपया लिस्ट से अपना गांव चुनें।",
+  eta_hint:"डिलीवरी प्रॉमिस देखने के लिए गांव चुनें।",
+  eta_same_ok:d=>`आज ही डिलीवरी — ${d} तक पहुंच जाएगा`, eta_same_late:"शाम 4 बजे के बाद ऑर्डर — आज की जगह कल डिलीवरी होगी",
+  eta_next:d=>`अगले दिन डिलीवरी — ${d} तक`, eta_next2:d=>`2 दिन में डिलीवरी — ${d} तक`,
+  eta_unknown:"बुकिंग के बाद हम व्हाट्सएप/कॉल पर डिलीवरी का दिन कन्फर्म करेंगे।",
+  payment:"पेमेंट", upi_main:"UPI · GPay, PhonePe, Paytm", upi_sub:"फास्ट डिस्पैच", cod_main:"कैश ऑन डिलीवरी", cod_sub:"डिस्पैच से पहले फोन पर कन्फर्म होगा",
+  continue_pay:"पेमेंट करें", place_cod:"COD ऑर्डर करें", cant_pay_online:"ऑनलाइन पेमेंट नहीं कर सकते?", pay_upi_instead:"UPI से पेमेंट करें",
+  agree:"मुझे पता है कि साइज की समस्या या मैन्युफैक्चरिंग डिफेक्ट के अलावा (डिलीवरी के 12 घंटे के अंदर बताने पर) कोई रिटर्न नहीं होगा।",
+  err_fill:"नाम, 10 डिजिट का मोबाइल नंबर और एड्रेस भरें।", err_email:"सही ईमेल डालें — कन्फर्मेशन वहीं भेजा जाएगा।",
+  err_village:"डिलीवरी कन्फर्म करने के लिए अपना गांव चुनें।", err_agree:"आगे बढ़ने के लिए रिटर्न पॉलिसी स्वीकार करें।",
+  err_stock:(n,s,q)=>`${n} (साइज ${s}) में सिर्फ ${q} बचे हैं — कृपया बैग अपडेट करें।`,
+  pay_title:a=>`UPI से ₹${a} पे करें`, order_id:"ऑर्डर ID", copy:"कॉपी", scan_hint:"किसी भी UPI ऐप से स्कैन करें। पेमेंट नोट में ऑर्डर ID पहले से भरा है।", open_upi:"इसी फोन से पे कर रहे हैं? UPI ऐप खोलें",
+  utr_label:"12 डिजिट UTR / UPI रेफरेंस नंबर (पेमेंट के बाद UPI ऐप में दिखता है)", utr_err:"UTR आपके UPI ऐप की पेमेंट डिटेल में दिखने वाला 12 डिजिट नंबर है।",
+  confirm_paid:"पेमेंट कर दिया — ऑर्डर कन्फर्म करें", back_btn:"बैक",
+  order_placed:"ऑर्डर प्लेस हो गया", utr_note:u=>`UTR ${u} मिल गया है। पेमेंट मैच होते ही व्हाट्सएप पर कन्फर्म करेंगे।`, cod_note:a=>`कैश ऑन डिलीवरी · ₹${a} तैयार रखें।`,
+  email_sent:e=>`कन्फर्मेशन ईमेल ${e} पर भेजा गया`, screenshot:"इस पेज का स्क्रीनशॉट लें, या My Orders में कभी भी देखें।", keep_browsing:"शॉपिंग जारी रखें",
+  orders_title:"मेरे ऑर्डर", lk_ph:"आपका मोबाइल नंबर", find:"ढूंढें", no_orders_yet:"अभी कोई ऑर्डर नहीं है।", ask_mobile:"चेकआउट में डाला गया मोबाइल नंबर डालें।",
+  invalid_mobile:"सही 10 डिजिट का मोबाइल नंबर डालें।", none_found:"इस नंबर पर कोई ऑर्डर नहीं मिला।",
+  booked:"बुक हुआ", dispatched:"डिस्पैच हुआ", delivered:"डिलीवर हुआ", cancelled:"कैंसिल", cancelled_note:"कैंसिल — स्टॉक वापस कर दिया गया है।",
+  otp_line:()=>`डिलीवरी OTP (डिलीवरी वाले को बताएं): `, proforma:"प्रोफार्मा", invoice:"टैक्स इनवॉइस", cancel_order:"ऑर्डर कैंसिल करें",
+  cancel_q:"क्या यह ऑर्डर कैंसिल करें?", yes_cancel:"हां, कैंसिल करें", keep_it:"रहने दें", cancelled_toast:"ऑर्डर कैंसिल, स्टॉक वापस कर दिया",
+  report_hdr:h=>`शिकायत दर्ज करें — ${h} घंटे बाकी`, size_issue:"साइज की समस्या", mfg_defect:"मैन्युफैक्चरिंग डिफेक्ट", note_ph:"समस्या बताएं (ऑप्शनल)",
+  submit_report:"शिकायत भेजें", need_photo:"कम से कम एक फोटो लगाएं।", reported_toast:"शिकायत मिल गई। 24–48 घंटे में जवाब देंगे।",
+  window_closed:"रिपोर्ट करने का समय खत्म हो गया।", under_review:"हम 24–48 घंटे में जवाब देंगे।",
+  privacy_title:"प्राइवेसी और रिटर्न पॉलिसी", privacy_collect_h:"हम क्या लेते हैं", privacy_collect:"आपका नाम, फोन नंबर, ईमेल, डिलीवरी एड्रेस और (शिकायत करने पर) आइटम की फोटो। इसे सिर्फ ऑर्डर प्रोसेस, डिलीवरी, अपडेट और एक्सचेंज/रिफंड के लिए यूज़ किया जाता है। यह कभी बेचा नहीं जाता।",
+  privacy_rights_h:"आपका अधिकार", privacy_rights:"आप कभी भी नीचे दिए कॉन्टैक्ट पर बोलकर अपनी जानकारी डिलीट करवा सकते हैं।",
+  privacy_contact_h:"सेलर और शिकायत संपर्क",
+}};
+let LANG = "hi";
+const t = k => { const v=(T[LANG]&&T[LANG][k]!==undefined)?T[LANG][k]:T.en[k]; return v; };
+function applyStaticLabels(){
+  document.querySelectorAll("[data-k]").forEach(el=>{ el.textContent = t(el.dataset.k); });
+  $("#demoTag").textContent=t("demo_tag"); $("#landSub").textContent=t("sub");
+  $("#searchInput").placeholder=t("search_ph"); $("#banner").textContent=t("banner");
+  $("#qcLabel").textContent=t("quick_shop"); $("#openPrivacy").textContent=t("privacy_link");
+  $("#feedBackLbl").textContent=t("back"); $("#bagLbl").textContent=t("nav_bag");
+  $("#fabBackLbl").textContent="⟵ "+t("back"); $("#ordersTitle").textContent=t("orders_title");
+  $("#lk-phone").placeholder=t("lk_ph"); $("#findBtn").textContent=t("find");
+  $("#trustrow").innerHTML = [["M20 6L9 17l-5-5",t("trust1")],["M12 2a10 10 0 100 20 10 10 0 000-20zM12 6v6l4 2",t("trust2")],["M4 12h16M12 4v16",t("trust3")]]
+    .map(([d,label])=>`<span class="trust"><svg viewBox="0 0 24 24"><path d="${d}"/></svg>${label}</span>`).join("");
+  document.querySelectorAll(".tabbar button[data-tab]").forEach(()=>{});
+}
+
+/* ================= Catalog labels ================= */
+const CAT_LABEL = {Women:{en:"Women",hi:"महिला"}, Men:{en:"Men",hi:"पुरुष"}, Kids:{en:"Kids",hi:"बच्चे"}};
+const SUB_LABEL = {Sarees:{en:"Sarees",hi:"साड़ी"}, Kurtis:{en:"Kurtis",hi:"कुर्ती"}, "Suit sets":{en:"Suit sets",hi:"सूट सेट"},
+  Shirts:{en:"Shirts",hi:"शर्ट"}, Kurtas:{en:"Kurtas",hi:"कुर्ता"}, Jeans:{en:"Jeans",hi:"जींस"}, Frocks:{en:"Frocks",hi:"फ्रॉक"}, "Ethnic sets":{en:"Ethnic sets",hi:"एथनिक सेट"}};
+const catL = c => (CAT_LABEL[c]&&CAT_LABEL[c][LANG]) || c;
+const subL = s => (SUB_LABEL[s]&&SUB_LABEL[s][LANG]) || s;
+const PRODUCT_NAME_HI = {
+  S101:"चंदेरी सिल्क साड़ी, जरी बॉर्डर", S102:"कॉटन बांधनी साड़ी",
+  K201:"ब्लॉक-प्रिंट अनारकली कुर्ती", K202:"स्ट्रेट कॉटन कुर्ती", D301:"दुपट्टे वाला सलवार सूट सेट",
+  M401:"लिनन हाफ-स्लीव शर्ट", M402:"चेक्ड कॉटन शर्ट", M403:"फेस्टिव कुर्ता, मंदारिन कॉलर", M404:"स्ट्रेच डेनिम जींस",
+  C501:"गर्ल्स पार्टी फ्रॉक", C502:"बॉयज़ कुर्ता पजामा सेट",
+};
+const pName = p => LANG==="hi" ? (p.nameHi||PRODUCT_NAME_HI[p.id]||p.name) : p.name;
+
+/* Real build: photo links come from a Google Sheet. Drive share links are converted to direct image URLs. */
+function driveImg(url){ const m=String(url).match(/(?:\/d\/|id=)([\w-]{20,})/); return m?`https://drive.google.com/thumbnail?id=${m[1]}&sz=w1200`:url; }
+
+/* ================= Placeholder garment photos (SVG) ================= */
+const SHAPES = {
+  shirt:"M105 70 L135 60 Q150 76 165 60 L195 70 L250 112 L230 152 L205 137 L205 332 L95 332 L95 137 L70 152 L50 112 Z",
+  kurta:"M110 58 L135 50 Q150 70 165 50 L190 58 L240 100 L224 192 L200 182 L216 362 L84 362 L100 182 L76 192 L60 100 Z",
+  frock:"M120 68 L140 60 Q150 72 160 60 L180 68 L196 132 L252 322 L48 322 L104 132 Z",
+  jeans:"M95 58 L205 58 L216 342 L166 342 L150 140 L134 342 L84 342 Z",
+  saree:"M70 46 L230 46 L252 362 L48 362 Z"
+};
+function photo(kind, c, a, bg, view){
+  const p = SHAPES[kind];
+  const defs = `<radialGradient id="vg" cx="50%" cy="34%" r="78%"><stop offset="0%" stop-color="#000" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity=".09"/></radialGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".38"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <pattern id="p" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="11" cy="11" r="2.6" fill="${a}" opacity=".8"/><circle cx="0" cy="0" r="1.4" fill="${a}" opacity=".6"/><circle cx="22" cy="22" r="1.4" fill="${a}" opacity=".6"/></pattern>`;
+  const bgLayer = `<rect width="300" height="400" fill="${bg}"/><rect width="300" height="400" fill="url(#vg)"/>`;
+  let body, label;
+  if(view==="fabric"){ body=`<rect width="300" height="400" fill="${c}"/><rect width="300" height="400" fill="url(#p)" opacity=".9"/><rect width="300" height="400" fill="url(#sheen)"/>`; label="Fabric close-up"; }
+  else if(view==="detail"){ body=`<g transform="translate(-150 -60) scale(2)"><path d="${p}" fill="${c}"/><path d="${p}" fill="url(#p)" opacity=".85"/><path d="${p}" fill="url(#sheen)"/></g>${kind==="saree"?`<rect x="0" y="300" width="300" height="34" fill="${a}" opacity=".9"/>`:""}`; label="Detail"; }
+  else {
+    const extra = kind==="saree" ? `<path d="M70 46 L140 46 L252 250 L252 330 Z" fill="${a}" opacity=".5"/><rect x="48" y="340" width="204" height="22" fill="${a}" opacity=".9"/>` : "";
+    body=`<ellipse cx="150" cy="374" rx="104" ry="11" fill="#000" opacity=".14"/><path d="${p}" fill="${c}"/>${view==="front"?`<path d="${p}" fill="url(#p)" opacity=".7"/>`:""}<path d="${p}" fill="url(#sheen)"/>${extra}`;
+    label = view==="front" ? "Front" : view==="back" ? "Back" : "Styled";
+  }
+  const tag = `<rect x="10" y="366" width="${label.length*5.4+42}" height="21" rx="10.5" fill="rgba(24,12,16,.5)"/><text x="21" y="380.5" font-family="Georgia, serif" font-size="10.5" fill="#fff" letter-spacing=".02em" opacity=".92">${label} · sample</text>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400"><defs>${defs}</defs>${bgLayer}${body}${tag}</svg>`;
+  return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+}
+const views = ["front","back","detail","fabric","styled"];
+const P = (kind,c,a,bg,n=4)=>views.slice(0,n).map(v=>photo(kind,c,a,bg,v));
+
+/* ================= Sample catalogue (live: read from Google Sheet) ================= */
+let PRODUCTS = [
+ {id:"S101",name:"Chanderi Silk Saree, Zari Border",cat:"Women",sub:"Sarees",mrp:3499,price:2499,sizes:["Free"],photos:P("saree","#7a1f3d","#e8b64a","#f3e6dc",5),
+  specs:{Fabric:"Chanderi silk-cotton",Length:"5.5 m + 0.8 m blouse",Wash:"Dry clean",Origin:"Chanderi, MP"},qa:[["Blouse stitched?","Unstitched blouse piece included."]],badge:"best"},
+ {id:"S102",name:"Cotton Bandhani Saree",cat:"Women",sub:"Sarees",mrp:1599,price:1199,sizes:["Free"],photos:P("saree","#c2410c","#fde68a","#fbf1e3"),
+  specs:{Fabric:"Pure cotton",Length:"5.5 m",Wash:"Hand wash cold"},qa:[]},
+ {id:"K201",name:"Block-Print Anarkali Kurti",cat:"Women",sub:"Kurtis",mrp:1299,price:849,sizes:["S","M","L","XL","XXL"],photos:P("kurta","#26408b","#f2f2f2","#e8ecf7"),
+  specs:{Fabric:"Rayon",Length:"46 in",Sleeve:"3/4",Wash:"Machine wash gentle"},qa:[["Is the colour same as photo?","Very close; slight variation under shop lights."]],badge:"best"},
+ {id:"K202",name:"Straight Cotton Kurti",cat:"Women",sub:"Kurtis",mrp:899,price:599,sizes:["M","L","XL"],photos:P("kurta","#2f7d4f","#fff3c4","#eaf3ec"),
+  specs:{Fabric:"Cotton",Length:"44 in",Sleeve:"Full"},qa:[]},
+ {id:"D301",name:"Salwar Suit Set with Dupatta",cat:"Women",sub:"Suit sets",mrp:2199,price:1599,sizes:["M","L","XL"],photos:P("kurta","#6b21a8","#f9a8d4","#f3e8ff"),
+  specs:{Includes:"Kurta, salwar, dupatta",Fabric:"Cotton blend",Dupatta:"Chiffon, 2.25 m"},qa:[],badge:"new"},
+ {id:"M401",name:"Linen Half-Sleeve Shirt",cat:"Men",sub:"Shirts",mrp:1499,price:999,sizes:["M","L","XL","XXL"],photos:P("shirt","#c9b48a","#8a7550","#f2efe8"),
+  specs:{Fabric:"Linen blend",Fit:"Regular",Collar:"Cuban"},qa:[["Does it shrink?","Under 2% after first cold wash."]]},
+ {id:"M402",name:"Checked Cotton Shirt",cat:"Men",sub:"Shirts",mrp:1199,price:749,sizes:["S","M","L","XL"],photos:P("shirt","#1e3a8a","#93c5fd","#e6edf8"),
+  specs:{Fabric:"100% cotton",Fit:"Slim"},qa:[]},
+ {id:"M403",name:"Festive Kurta, Mandarin Collar",cat:"Men",sub:"Kurtas",mrp:1799,price:1299,sizes:["M","L","XL","XXL"],photos:P("kurta","#b45309","#fde68a","#fbf3e6"),
+  specs:{Fabric:"Cotton silk",Length:"40 in",Occasion:"Festive, Diwali"},qa:[],badge:"new"},
+ {id:"M404",name:"Stretch Denim Jeans",cat:"Men",sub:"Jeans",mrp:1999,price:1299,sizes:["30","32","34","36"],photos:P("jeans","#1f3b63","#3d5a85","#e9eef4"),
+  specs:{Fabric:"98% cotton, 2% elastane",Fit:"Slim tapered"},qa:[]},
+ {id:"C501",name:"Girls' Party Frock",cat:"Kids",sub:"Frocks",mrp:1099,price:699,sizes:["2-3Y","4-5Y","6-7Y"],photos:P("frock","#db2777","#fbcfe8","#fdf0f6"),
+  specs:{Fabric:"Net with cotton lining",Closure:"Back zip"},qa:[]},
+ {id:"C502",name:"Boys' Kurta Pyjama Set",cat:"Kids",sub:"Ethnic sets",mrp:999,price:649,sizes:["2-3Y","4-5Y","6-7Y","8-9Y"],photos:P("kurta","#0f766e","#99f6e4","#e7f5f3"),
+  specs:{Includes:"Kurta + pyjama",Fabric:"Cotton"},qa:[]},
+];
+function buildCatCover(){ const out={}; PRODUCTS.forEach(p=>{ if(!out[p.cat]) out[p.cat]=p.photos[0]; }); return out; }
+let CAT_COVER = buildCatCover();
+/* Maps one Products-tab row (as returned by Code.gs's getProducts_) into the shape this page uses. */
+function mapApiProduct(p){
+  return {
+    id:p.id, name:p.name, nameHi:p.nameHi, cat:p.category, sub:p.subcategory,
+    mrp:p.mrp, price:p.price, gstRate:p.gstRate,
+    sizes:(p.sizes&&p.sizes.length)?p.sizes:["Free"],
+    photos:(p.photos&&p.photos.length)?p.photos:[photo("kurta","#a84766","#f6ebdd","#fbf4ec")],
+    specs:p.specs||{}, qa:(p.faq||[]).map(f=>Array.isArray(f)?f:[f.q||f.question||"",f.a||f.answer||""]),
+    badge:p.badge||undefined
+  };
+}
+const STOCK_SEED = {
+  S101:{Free:5}, S102:{Free:2},
+  K201:{S:0,M:4,L:2,XL:6,XXL:0}, K202:{M:5,L:0,XL:3}, D301:{M:3,L:4,XL:0},
+  M401:{M:4,L:0,XL:5,XXL:2}, M402:{S:3,M:0,L:4,XL:2}, M403:{M:5,L:3,XL:0,XXL:4}, M404:{"30":3,"32":0,"34":5,"36":2},
+  C501:{"2-3Y":3,"4-5Y":0,"6-7Y":4}, C502:{"2-3Y":2,"4-5Y":3,"6-7Y":0,"8-9Y":5}
+};
+const GST_RATE = p => p<=1000 ? 5 : 12; // illustrative only — confirm actual HSN/rate with your CA after GST registration
+
+/* ================= Geofencing — sample village list (REPLACE with your real villages/coordinates) ================= */
+/* tier: 'same' = same-day (Pipariya town, 4 PM cutoff) · 'next' = next-day · 'next2' = next-to-next-day · 'other' = not yet covered */
+const SHOP_LOC = {lat:22.760, lng:78.357}; // approx Pipariya — set your exact shop location for live
+const DEFAULT_ZONE_RADIUS_KM = 4.5; // same-day delivery radius around SHOP_LOC; owner-editable via S.config.zone.radiusKm
+/* Seeded defaults only — the live, owner-editable copy lives in S.config.villages (see seed()/config below). */
+const DEFAULT_VILLAGES = [
+  {id:"pipariya-town", name:"Pipariya Town", nameHi:"पिपरिया टाउन", lat:22.760, lng:78.357, tier:"same"},
+  {id:"sarra", name:"Sarra", nameHi:"सर्रा", lat:22.735, lng:78.330, tier:"same"},
+  {id:"matkuli", name:"Matkuli", nameHi:"मटकुली", lat:22.700, lng:78.420, tier:"next"},
+  {id:"sohagpur", name:"Sohagpur", nameHi:"सोहागपुर", lat:22.695, lng:78.185, tier:"next"},
+  {id:"bankhedi", name:"Bankhedi", nameHi:"बानखेड़ी", lat:22.600, lng:78.130, tier:"next2"},
+  {id:"other", name:"My village isn't listed", nameHi:"मेरा गांव सूची में नहीं है", lat:null, lng:null, tier:"other"},
+];
+function haversineKm(a,b){ const R=6371,dLat=(b.lat-a.lat)*Math.PI/180,dLng=(b.lng-a.lng)*Math.PI/180;
+  const s=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s)); }
+function nearestVillage(loc){ let best=null,bd=Infinity; for(const v of S.config.villages){ if(v.lat==null) continue; const d=haversineKm(loc,v); if(d<bd){bd=d;best=v;} } return best; }
+function villageName(v){ return LANG==="hi" ? v.nameHi : v.name; }
+
+/* ================= State (demo: browser storage; live: Apps Script → Google Sheet) ================= */
+let S = {votes:{}, cart:[], orders:[], baseVotes:{}, stock:{}, lang:"hi", config:null};
+let CANCEL_WINDOW_HOURS = 6, ISSUE_WINDOW_HOURS = 12;
+let POLICY_REMOTE = null; // {key:value} from the Policies tab, once loaded — null means "use hardcoded T.en/T.hi copy"
+function loadLocal(){ try{ const r=localStorage.getItem(STORE_KEY); if(r) S=Object.assign(S,JSON.parse(r)); }catch(e){} LANG=S.lang||"hi"; seed(); }
+function save(){ S.lang=LANG; try{ localStorage.setItem(STORE_KEY, JSON.stringify(S)); }catch(e){} }
+function fillPolicyTemplate(str, vals){ return String(str||"").replace(/\{(\w+)\}/g, (m,k)=> (vals && vals[k]!=null) ? vals[k] : m); }
+/* Merges Policies-tab copy into T.en/T.hi so every existing t("...") call picks it up automatically. */
+function applyRemotePolicies(policies){
+  if(!policies) return;
+  POLICY_REMOTE = policies;
+  const MAP = {
+    agree_checkbox_en:["en","agree"], agree_checkbox_hi:["hi","agree"],
+    delivery_note_en:["en","delivery_note"], delivery_note_hi:["hi","delivery_note"],
+    privacy_title_en:["en","privacy_title"], privacy_title_hi:["hi","privacy_title"],
+    privacy_collect_h_en:["en","privacy_collect_h"], privacy_collect_h_hi:["hi","privacy_collect_h"],
+    privacy_collect_en:["en","privacy_collect"], privacy_collect_hi:["hi","privacy_collect"],
+    privacy_rights_h_en:["en","privacy_rights_h"], privacy_rights_h_hi:["hi","privacy_rights_h"],
+    privacy_rights_en:["en","privacy_rights"], privacy_rights_hi:["hi","privacy_rights"],
+    privacy_contact_h_en:["en","privacy_contact_h"], privacy_contact_h_hi:["hi","privacy_contact_h"]
+  };
+  Object.keys(MAP).forEach(k=>{ if(policies[k]!=null && policies[k]!==""){ const [lang,key]=MAP[k]; T[lang][key]=policies[k]; } });
+}
+/* Fetches products/stock/villages/zone/config/policies from the Apps Script backend and merges
+   them over the local demo data. Always boots from loadLocal() first so the app works offline
+   or before API_URL is deployed — a failed/placeholder fetch just leaves the demo data in place. */
+async function loadFromApi(){
+  loadLocal();
+  if(!apiConfigured()) return;
+  try{
+    const data = await apiGetAll();
+    if(data.products && data.products.length){ PRODUCTS = data.products.map(mapApiProduct); CAT_COVER = buildCatCover(); }
+    if(data.stock && Object.keys(data.stock).length) S.stock = data.stock;
+    if(data.villages && data.villages.length) S.config.villages = data.villages;
+    if(data.config){
+      applyRemoteConfig(data.config);
+      if(data.config.cutoff_hour!=null) S.config.cutoffHour = Number(data.config.cutoff_hour)||S.config.cutoffHour;
+      if(data.config.zone_center_lat!=null && data.config.zone_center_lng!=null){
+        S.config.zone = { lat:Number(data.config.zone_center_lat), lng:Number(data.config.zone_center_lng), radiusKm:Number(data.config.zone_radius_km)||DEFAULT_ZONE_RADIUS_KM };
+      }
+    }
+    applyRemotePolicies(data.policies);
+    save();
+  }catch(err){
+    console.warn("Geeta Dresses: API unreachable, using local demo data.", err);
+  }
+}
+function seed(){
+  if(!S.stock || !Object.keys(S.stock).length) S.stock = JSON.parse(JSON.stringify(STOCK_SEED));
+  if(!S.config){ S.config = { cutoffHour: DEFAULT_CUTOFF_HOUR, villages: JSON.parse(JSON.stringify(DEFAULT_VILLAGES)), zone:{ lat:SHOP_LOC.lat, lng:SHOP_LOC.lng, radiusKm:DEFAULT_ZONE_RADIUS_KM } }; }
+  if(S.orders.length){ save(); return; }
+  const d=(n,h)=>{const x=new Date();x.setDate(x.getDate()-n);if(h)x.setHours(x.getHours()-h);return x.toISOString()};
+  S.orders=[
+    {id:"GD2610032217",at:d(2),name:"Sunita Patel",phone:"9827011223",email:"sunita.p@example.com",villageId:"pipariya-town",addr:"Ward 7, Station Road",items:[{id:"K201",size:"L",qty:1}],amount:849,mode:"UPI",utr:"627812345671",status:"Verified",stage:"Delivered",otp:"4821",dispatchedAt:d(1,10),deliveredAt:d(0,6),deliveryPhoto:null,sample:true},
+    {id:"GD2610034409",at:d(2),name:"Rahul Verma",phone:"9900144556",email:"rahul.v@example.com",villageId:"matkuli",addr:"Near school road",items:[{id:"M401",size:"L",qty:2}],amount:1998,mode:"UPI",utr:"627898765432",status:"Pending check",stage:"Booked",sample:true},
+    {id:"GD2610041180",at:d(1),name:"Kavita Sahu",phone:"9425077881",email:"kavita.s@example.com",villageId:"pipariya-town",addr:"Gandhi Chowk",items:[{id:"S102",size:"Free",qty:1}],amount:1199,mode:"COD",utr:"",status:"COD",stage:"Booked",sample:true},
+    {id:"GD2610045531",at:d(1),name:"Anil Rao",phone:"9008022113",email:"anil.rao@example.com",villageId:"sohagpur",addr:"Main bazaar road",items:[{id:"M403",size:"XL",qty:1}],amount:1299,mode:"UPI",utr:"627855501234",status:"Verified",stage:"Dispatched",otp:"7703",dispatchedAt:d(0,20),sample:true},
+  ];
+  PRODUCTS.forEach((p,i)=>S.baseVotes[p.id]={like:8+((i*7)%15),dislike:1+((i*3)%5)});
+  save();
+}
+
+/* ================= Helpers ================= */
+const $=s=>document.querySelector(s);
+const rs=n=>"₹"+Number(n).toLocaleString("en-IN");
+const byId=id=>PRODUCTS.find(p=>p.id===id);
+const villageById=id=>S.config.villages.find(v=>v.id===id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function toast(t){const el=document.createElement("div");el.className="toast";el.textContent=t;$("#app").appendChild(el);setTimeout(()=>el.remove(),2200)}
+function stockFor(id,size){ return (S.stock[id]||{})[size] ?? 0 }
+function lastDigits(s,n){ return String(s||"").replace(/\D/g,"").slice(-n) }
+const ICON={
+  heart:'<svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-9.2-8.6C1.3 8.4 3 5 6.3 5c2 0 3.2 1.1 3.7 2 .5-.9 1.7-2 3.7-2C17 5 18.7 8.4 17.2 11.4 15 15.6 12 20 12 20z" transform="translate(2 0)"/></svg>',
+  down:'<svg viewBox="0 0 24 24"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.7a2 2 0 0 0-2 1.7l-1.4 9A2 2 0 0 0 4.3 15H10zM17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>',
+  info:'<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z"/><path d="M12 11v4M12 8h.01"/></svg>',
+  bag:'<svg viewBox="0 0 24 24"><path d="M6 7h12l1 14H5L6 7z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg>',
+  share:'<svg viewBox="0 0 24 24"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M16 6l-4-4-4 4M12 2v13"/></svg>',
+  pin:'<svg viewBox="0 0 24 24"><path d="M12 21s7-6.6 7-12a7 7 0 10-14 0c0 5.4 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>'
+};
+
+/* ================= Navigation / history ================= */
+let screen="land";
+function go(state, replace){
+  history[replace?"replaceState":"pushState"](state, "", "#"+(state.screen==="feed"&&state.p?state.p:""));
+  screen=state.screen; applyState(state);
+}
+function applyState(st){
+  if(st.screen==="land"){ selCat=st.cat||null; selSubs=new Set(st.subs||[]); step=st.step||"cat"; show("land"); renderLanding(); }
+  if(st.screen==="feed"){ selCat=st.cat; selSubs=new Set(st.subs||[]); show("feed"); renderFeed(); }
+  if(st.screen==="orders"){ show("orders"); renderOrdersView(); }
+  syncChrome();
+}
+window.onpopstate=e=>{ if(e.state) applyState(e.state); else applyState({screen:"land",step:"cat"}); };
+function show(v){["land","feed","orders"].forEach(x=>$("#v-"+x).hidden=(x!==v))}
+function syncChrome(){
+  // Tabbar + cart strip are now persistent across every customer screen, including the feed.
+  $("#tabbar").hidden=false;
+  document.querySelectorAll(".tabbar button").forEach(b=>b.classList.toggle("active", (b.dataset.tab==="land"&&screen==="land")||(b.dataset.tab==="orders"&&screen==="orders")));
+  const n=S.cart.reduce((a,c)=>a+c.qty,0);
+  $("#tabBadge").hidden=!n; $("#tabBadge").textContent=n;
+  const strip=$("#cartStrip");
+  if(n){
+    strip.hidden=false; strip.style.bottom="68px";
+    strip.innerHTML=`<div><b>${n} ${LANG==="hi"?"आइटम":"item"+(n>1?"s":"")}</b><br><span>${rs(cartTotal())}</span></div><button id="stripGo">${t("continue_addr").split(" ").slice(0,2).join(" ")} →</button>`;
+    $("#stripGo").onclick=openCart;
+  } else strip.hidden=true;
+  // In the feed, the floating "back" FAB and the cart strip occupy the same corner — show
+  // only one at a time: the strip when the bag has items, the FAB otherwise.
+  const fab=$("#fabBack");
+  if(fab) fab.hidden = screen==="feed" && n>0;
+  document.body.classList.toggle("cart-chrome", n>0);
+  updateCartCount();
+}
+$("#tabbar").onclick=e=>{const b=e.target.closest("button");if(!b)return;
+  if(b.dataset.tab==="land") go({screen:"land",step:"cat"});
+  if(b.dataset.tab==="orders") go({screen:"orders"});
+  if(b.dataset.tab==="bag") openCart();
+};
+$("#fabBack").onclick=()=>history.back();
+$("#backLand").onclick=()=>history.back();
+
+/* ---- Language toggle ---- */
+function setLang(l){ LANG=l; save(); document.querySelectorAll("#langtog button").forEach(b=>b.classList.toggle("on",b.dataset.l===l)); applyStaticLabels(); applyState({screen,step,cat:selCat,subs:[...selSubs]}); }
+$("#langtog").onclick=e=>{const b=e.target.closest("button");if(b) setLang(b.dataset.l)};
+
+/* ================= Search (home inline bar + reusable sheet from feed/orders) ================= */
+function filterProducts(q){
+  q=String(q||"").trim().toLowerCase(); if(!q) return [];
+  return PRODUCTS.filter(p=>pName(p).toLowerCase().includes(q)||p.name.toLowerCase().includes(q)||catL(p.cat).toLowerCase().includes(q)).slice(0,8);
+}
+function searchHitsHTML(hits){
+  return hits.map(p=>`<button data-id="${p.id}"><img src="${p.photos[0]}" alt=""><div class="sr-meta"><div>${esc(pName(p))}</div><div style="color:var(--muted)">${rs(p.price)}</div></div></button>`).join("");
+}
+$("#searchInput").oninput=e=>{
+  const hits=filterProducts(e.target.value);
+  $("#searchResults").hidden = !hits.length;
+  $("#searchResults").innerHTML = searchHitsHTML(hits);
+};
+$("#searchResults").onclick=e=>{const b=e.target.closest("[data-id]");if(!b)return;$("#searchResults").hidden=true;$("#searchInput").value="";openDetails(b.dataset.id)};
+function openSearchSheet(){
+  sheet(`<button class="x" id="sx">✕</button><h3>${t("search_ph")}</h3>
+    <div class="searchbar searchsheet-input" style="position:relative;box-shadow:none">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input id="sheetSearchInput" placeholder="${t("search_ph")}" style="box-shadow:none;border:1px solid var(--line)">
+    </div>
+    <div id="sheetSearchResults" style="margin-top:10px;display:flex;flex-direction:column"></div>`);
+  $("#sx").onclick=closeSheet;
+  const inp=$("#sheetSearchInput"), res=$("#sheetSearchResults");
+  setTimeout(()=>inp.focus(),50);
+  inp.oninput=()=>{ res.innerHTML = searchHitsHTML(filterProducts(inp.value)); };
+  res.onclick=e=>{const b=e.target.closest("[data-id]");if(!b)return;openDetails(b.dataset.id)};
+}
+$("#openSearchFeed").onclick=openSearchSheet;
+$("#openSearchOrders").onclick=openSearchSheet;
+
+/* ================= Landing (step 1: category → step 2: sub-category) ================= */
+let selCat=null, selSubs=new Set(), step="cat";
+function renderLanding(){
+  $("#policyLand").innerHTML=policyHtml();
+  $("#quickcats").innerHTML=[...new Set(PRODUCTS.map(p=>p.cat))].map(c=>`<button class="qc" data-cat="${c}"><span class="ring"><img src="${CAT_COVER[c]}" alt=""></span><span>${catL(c)}</span></button>`).join("");
+  if(step==="cat"){
+    $("#stepHead").innerHTML=`<h2>${t("step_cat")}</h2><div class="step-dots"><i class="on"></i><i></i></div>`;
+    const cats=[...new Set(PRODUCTS.map(p=>p.cat))];
+    $("#cats").innerHTML=cats.map(c=>`<button class="cat" data-cat="${c}"><img src="${CAT_COVER[c]}" alt=""><div class="catlabel"><b>${catL(c)}</b><small>${PRODUCTS.filter(p=>p.cat===c).length}</small></div></button>`).join("")
+     + `<button class="cat" data-cat="__all"><img src="${PRODUCTS[3].photos[3]}" alt=""><div class="catlabel"><b>${LANG==="hi"?"सब देखें":"Show everything"}</b><small>${PRODUCTS.length}</small></div></button>`;
+    return;
+  }
+  $("#stepHead").innerHTML=`<button class="owner-btn" id="stepBack" aria-label="Back">←</button><h2>${catL(selCat)}${t("step_sub")}</h2><div class="step-dots"><i class="on"></i><i class="on"></i></div>`;
+  $("#stepBack").onclick=()=>history.back();
+  const subs=[...new Set(PRODUCTS.filter(p=>p.cat===selCat).map(p=>p.sub))];
+  $("#cats").innerHTML=subs.map(sb=>{const items=PRODUCTS.filter(p=>p.cat===selCat&&p.sub===sb);
+    return `<button class="cat" data-sub="${sb}" aria-pressed="${selSubs.has(sb)}"><img src="${items[0].photos[0]}" alt=""><div class="catlabel"><b>${subL(sb)}</b><small>${items.length}</small></div></button>`}).join("")
+    + (subs.length>1?`<button class="cat" data-sub="__all" aria-pressed="${!selSubs.size}"><img src="${CAT_COVER[selCat]}" alt=""><div class="catlabel"><b>${LANG==="hi"?"सभी "+catL(selCat):"All "+catL(selCat)}</b><small>${PRODUCTS.filter(p=>p.cat===selCat).length}</small></div></button>`:"")
+    + `<button class="cta" id="startFeed" style="grid-column:1/-1;margin-top:4px">${t("see_items")(filtered().length)}</button>`;
+}
+function filtered(){
+  if(!selCat) return [];
+  if(selCat==="__all") return PRODUCTS;
+  return PRODUCTS.filter(p=>p.cat===selCat && (!selSubs.size||selSubs.has(p.sub)));
+}
+$("#cats").onclick=e=>{
+  const go2=e.target.closest("#startFeed"); if(go2){ go({screen:"feed",cat:selCat,subs:[...selSubs]}); return; }
+  const b=e.target.closest(".cat");if(!b)return;
+  if(b.dataset.cat){ selCat=b.dataset.cat; selSubs=new Set();
+    if(selCat==="__all"){ go({screen:"feed",cat:selCat,subs:[]}); return; }
+    step="sub"; go({screen:"land",step:"sub",cat:selCat,subs:[]}); $("#v-land").scrollTop=0; return; }
+  const sb=b.dataset.sub; if(sb==="__all") selSubs.clear(); else selSubs.has(sb)?selSubs.delete(sb):selSubs.add(sb);
+  renderLanding();
+};
+$("#quickcats").onclick=e=>{const b=e.target.closest(".qc");if(!b)return;selCat=b.dataset.cat;selSubs=new Set();step="sub";go({screen:"land",step:"sub",cat:selCat,subs:[]});$("#v-land").scrollTop=0};
+$("#openPrivacy").onclick=openPrivacy;
+
+/* ================= Feed ================= */
+function renderFeed(){
+  const list=filtered();
+  $("#crumb").textContent = selCat==="__all"?t("crumb_all"):`${catL(selCat)}${selSubs.size?" · "+[...selSubs].map(subL).join(", "):""}`;
+  $("#feed").innerHTML=list.map(p=>{
+    const off=Math.round((1-p.price/p.mrp)*100), v=S.votes[p.id];
+    const total=p.sizes.reduce((a,s)=>a+stockFor(p.id,s),0);
+    const stockMsg = total===0?`<div class="stockline out">${t("sold_out")}</div>`:(total<=3?`<div class="stockline low">${t("only_left")(total)}</div>`:"");
+    return `<article class="reel" data-id="${p.id}">
+      <div class="photos">${p.photos.map((src,i)=>`<img src="${src}" alt="${esc(pName(p))} ${i+1}" loading="lazy">`).join("")}</div>
+      <div class="dots">${p.photos.map((_,i)=>`<i class="${i?"":"on"}"></i>`).join("")}</div>
+      ${p.badge?`<div class="tagrow"><span class="tag-pill ${p.badge==='best'?'tag-best':'tag-new'}">${p.badge==='best'?(LANG==='hi'?'बेस्टसेलर':'Bestseller'):(LANG==='hi'?'नया':'New')}</span></div>`:""}
+      <div class="offribbon">${off}% OFF</div>
+      <div class="info">
+        <div class="sub">${catL(p.cat)} · ${subL(p.sub)}</div>
+        <h2>${esc(pName(p))}</h2>
+        <div class="price"><span class="now">${rs(p.price)}</span><s>${rs(p.mrp)}</s><span class="off">${off}% ${LANG==="hi"?"छूट":"off"}</span></div>
+        <div class="hint">${p.sizes.join(" · ")} — ${p.photos.length} ${LANG==="hi"?"फोटो, साइड स्वाइप करें":"photos, swipe sideways"}</div>
+        ${stockMsg}
+      </div>
+      <div class="rail">
+        <button class="rbtn ${v==="like"?"liked":""}" data-act="like" aria-label="Like"><span class="ic">${ICON.heart}</span>${likeCount(p.id)}</button>
+        <button class="rbtn ${v==="dislike"?"disliked":""}" data-act="dislike" aria-label="Not for me"><span class="ic">${ICON.down}</span>${t("not_for_me")}</button>
+        <button class="rbtn" data-act="info" aria-label="Details"><span class="ic">${ICON.info}</span>${t("details")}</button>
+        <button class="rbtn share" data-act="share" aria-label="Share"><span class="ic">${ICON.share}</span>${t("share")}</button>
+        <button class="rbtn bag" data-act="add" aria-label="Add"><span class="ic">${ICON.bag}</span>${t("add")}</button>
+      </div>
+    </article>`}).join("") + `<div class="end"><div><h3>${t("end_title")}</h3><p>${t("end_sub")}</p><button class="cta alt" id="endBack" style="margin-top:12px">${t("browse_other")}</button></div></div>`;
+  $("#feed").scrollTop=0;
+  document.querySelectorAll(".photos").forEach(ph=>ph.addEventListener("scroll",()=>{
+    const i=Math.round(ph.scrollLeft/ph.clientWidth);
+    ph.nextElementSibling.querySelectorAll("i").forEach((d,k)=>d.classList.toggle("on",k===i));
+  },{passive:true}));
+  $("#endBack").onclick=()=>history.back();
+  syncChrome();
+}
+function likeCount(id){const b=S.baseVotes[id]||{like:0};return b.like+(S.votes[id]==="like"?1:0)}
+$("#feed").onclick=e=>{
+  const b=e.target.closest("[data-act]"); if(!b) return;
+  const id=b.closest(".reel").dataset.id, act=b.dataset.act;
+  if(act==="like"||act==="dislike"){
+    S.votes[id] = S.votes[id]===act?null:act; save();
+    const rail=b.parentElement;
+    rail.children[0].className="rbtn "+(S.votes[id]==="like"?"liked":"");
+    rail.children[0].lastChild.textContent=likeCount(id);
+    rail.children[1].className="rbtn "+(S.votes[id]==="dislike"?"disliked":"");
+  }
+  if(act==="info") openDetails(id);
+  if(act==="add") openDetails(id,true);
+  if(act==="share") openShare(id);
+};
+
+/* ================= Sheets ================= */
+function sheet(html){ $("#layer").innerHTML=`<div class="scrim" id="scrim"></div><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div>`; $("#scrim").onclick=closeSheet; }
+function closeSheet(){ $("#layer").innerHTML=""; }
+function policyHtml(){
+  // Prefer the owner-editable Policies-tab copy once loaded; fall back to this hardcoded text
+  // if the API hasn't loaded (not deployed yet / unreachable) or that key is missing.
+  if(POLICY_REMOTE){
+    const key = LANG==="hi" ? "return_policy_hi" : "return_policy_en";
+    if(POLICY_REMOTE[key]) return esc(POLICY_REMOTE[key]).replace(/\n/g,"<br>");
+  }
+  return LANG==="hi"
+    ? `<b>बुकिंग के बाद रिटर्न नहीं।</b> सिर्फ <b>साइज की समस्या</b> या <b>मैन्युफैक्चरिंग डिफेक्ट</b> पर एक्सचेंज/रिटर्न होगा। डिलीवरी मिलते ही आइटम चेक करें और <b>12 घंटे</b> के अंदर बताएं। ऑर्डर सिर्फ बुकिंग के <b>पहले 6 घंटे</b> में कैंसिल हो सकता है।`
+    : `<b>No returns once booked.</b> Exchange or return only for a <b>size issue</b> or a <b>manufacturing defect</b>. Please check the item when it is delivered and tell us within <b>12 hours</b>. Orders can be cancelled only within the <b>first 6 hours</b> of booking.`;
+}
+function openPrivacy(){
+  let contact = `${SHOP.owner}, Proprietor — ${SHOP.name}, Pipariya<br>${SHOP.phone} · ${SHOP.email}`;
+  if(POLICY_REMOTE){
+    const key = LANG==="hi" ? "grievance_contact_hi" : "grievance_contact_en";
+    if(POLICY_REMOTE[key]) contact = esc(fillPolicyTemplate(POLICY_REMOTE[key], {owner_name:SHOP.owner, shop_name:SHOP.name, phone:SHOP.phone, email:SHOP.email}));
+  }
+  sheet(`<button class="x" id="sx">✕</button><h3>${t("privacy_title")}</h3>
+   <div class="policy" style="margin-bottom:10px">${policyHtml()}</div>
+   <p class="sec-label">${t("privacy_collect_h")}</p>
+   <p style="font-size:14px">${t("privacy_collect")}</p>
+   <p class="sec-label">${t("privacy_rights_h")}</p>
+   <p style="font-size:14px">${t("privacy_rights")}</p>
+   <p class="sec-label">${t("privacy_contact_h")}</p>
+   <p style="font-size:14px">${contact}</p>`);
+  $("#sx").onclick=closeSheet;
+}
+function openShare(id){
+  const p=byId(id);
+  const link = location.origin+location.pathname+"#"+p.id;
+  const text = `${pName(p)} — ${rs(p.price)} (MRP ${rs(p.mrp)}) · Geeta Dresses, Pipariya.\n${link}`;
+  sheet(`<button class="x" id="sx">✕</button><h3>${t("share_title")}</h3>
+    <div class="line-item" style="border:0"><img src="${p.photos[0]}" alt=""><div class="meta"><div>${esc(pName(p))}</div><div style="color:var(--muted)">${rs(p.price)}</div></div></div>
+    <div class="share-row"><button class="wa" id="shWa">${t("share_wa")}</button><button id="shCopy">${t("share_copy")}</button></div>
+    <p style="font-size:12px;color:var(--muted)">${t("share_hint")}</p>`);
+  $("#sx").onclick=closeSheet;
+  $("#shWa").onclick=()=>window.open("https://wa.me/?text="+encodeURIComponent(text),"_blank","noopener");
+  $("#shCopy").onclick=()=>{navigator.clipboard?.writeText(link).then(()=>toast(t("link_copied"))).catch(()=>toast(link))};
+}
+function openDetails(id, focusSize){
+  const p=byId(id); let size=p.sizes.length===1?p.sizes[0]:null;
+  if(size && stockFor(id,size)<=0) size=null;
+  const off=Math.round((1-p.price/p.mrp)*100);
+  sheet(`<button class="x" aria-label="Close" id="sx">✕</button>
+    <h3>${esc(pName(p))}</h3>
+    <div class="price" style="color:var(--fg)"><span class="now">${rs(p.price)}</span><s>${rs(p.mrp)}</s><span class="off" style="color:var(--leaf)">${off}% ${LANG==="hi"?"छूट":"off"}</span></div>
+    <p class="sec-label" style="margin-top:14px">${t("select_size")}</p>
+    <div class="sizes" id="sz">${p.sizes.map(s=>{const n=stockFor(id,s);return `<button class="size" data-s="${s}" aria-pressed="${s===size}" ${n<=0?"disabled":""}>${s}</button>`}).join("")}</div>
+    <div class="sizehint" id="szHint"></div>
+    <div class="err" id="szErr"></div>
+    <button class="cta alt" id="addBtn">${t("add")}</button>
+    <div class="share-row"><button class="wa" id="dWa">${t("share_wa")}</button><button id="dCopy">${t("share_copy")}</button></div>
+    <dl class="specs">${Object.entries(p.specs).map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}<dt>${t("code")}</dt><dd>${p.id}</dd></dl>
+    <div class="note">${t("delivery_note")}</div>
+    <div class="policy" style="margin-top:10px">${policyHtml()}</div>
+    ${p.qa.length?`<p class="sec-label" style="margin-top:14px">${t("questions")}</p>`+p.qa.map(([q,a])=>`<div class="qa"><b>${esc(q)}</b>${esc(a)}</div>`).join(""):""}`);
+  $("#sx").onclick=closeSheet;
+  const hint=()=>{$("#szHint").textContent = size && stockFor(id,size)>0 && stockFor(id,size)<=2 ? t("only_left_size")(stockFor(id,size),size) : ""};
+  hint();
+  $("#sz").onclick=e=>{const b=e.target.closest(".size");if(!b||b.disabled)return;size=b.dataset.s;$("#sz").querySelectorAll(".size").forEach(x=>x.setAttribute("aria-pressed",x===b));$("#szErr").textContent="";hint()};
+  $("#addBtn").onclick=()=>{
+    if(!size){$("#szErr").textContent=t("pick_size_first");return}
+    const avail=stockFor(id,size); const ex=S.cart.find(c=>c.id===id&&c.size===size); const curQty=ex?ex.qty:0;
+    if(curQty+1>avail){$("#szErr").textContent=t("only_left_size")(avail,size);return}
+    ex?ex.qty++:S.cart.push({id,size,qty:1});
+    save(); syncChrome(); closeSheet(); toast(LANG==="hi"?"बैग में डाल दिया":"Added to bag");
+  };
+  const link=location.origin+location.pathname+"#"+p.id;
+  const text=`${pName(p)} — ${rs(p.price)} · Geeta Dresses, Pipariya.\n${link}`;
+  $("#dWa").onclick=()=>window.open("https://wa.me/?text="+encodeURIComponent(text),"_blank","noopener");
+  $("#dCopy").onclick=()=>{navigator.clipboard?.writeText(link).then(()=>toast(t("link_copied"))).catch(()=>toast(link))};
+  if(focusSize && !size) $("#sz .size:not([disabled])")?.focus();
+}
+function updateCartCount(){ $("#cartCount").textContent=S.cart.reduce((a,c)=>a+c.qty,0) }
+const cartTotal=()=>S.cart.reduce((a,c)=>a+byId(c.id).price*c.qty,0);
+
+$("#openCart").onclick=openCart;
+function openCart(){
+  if(!S.cart.length){ sheet(`<button class="x" id="sx">✕</button><h3>${t("bag_empty")}</h3><p style="color:var(--muted)">${t("bag_empty_sub")}</p>`); $("#sx").onclick=closeSheet; return; }
+  sheet(`<button class="x" id="sx" aria-label="Close">✕</button><h3>${t("your_bag")}</h3>
+    <div id="lines">${S.cart.map((c,i)=>{const p=byId(c.id);return `<div class="line-item"><img src="${p.photos[0]}" alt=""><div class="meta"><div>${esc(pName(p))}</div><div style="color:var(--muted)">${t("select_size")} ${c.size} · ${rs(p.price)}</div></div><div class="qty"><button data-i="${i}" data-d="-1" aria-label="Less">−</button>${c.qty}<button data-i="${i}" data-d="1" aria-label="More">+</button></div></div>`}).join("")}</div>
+    <div class="tot"><span>${t("total")}</span><span>${rs(cartTotal())}</span></div>
+    <button class="cta" id="toCheckout">${t("continue_addr")}</button>`);
+  $("#sx").onclick=closeSheet;
+  $("#lines").onclick=e=>{const b=e.target.closest("[data-i]");if(!b)return;const c=S.cart[+b.dataset.i];
+    if(+b.dataset.d>0){ if(c.qty+1>stockFor(c.id,c.size)){toast(LANG==="hi"?"इस साइज में और स्टॉक नहीं है":"No more stock in this size");return} }
+    c.qty+=+b.dataset.d;if(c.qty<1)S.cart.splice(+b.dataset.i,1);save();syncChrome();openCart()};
+  $("#toCheckout").onclick=openCheckout;
+}
+
+/* ================= Delivery ETA by village tier + 4 PM cutoff ================= */
+const fmtD=d=>d.toLocaleDateString(LANG==="hi"?"hi-IN":"en-IN",{day:"numeric",month:"short",weekday:"short"});
+const fmtDT=iso=>new Date(iso).toLocaleString(LANG==="hi"?"hi-IN":"en-IN",{day:"numeric",month:"short",hour:"numeric",minute:"2-digit"});
+function etaForVillage(v){
+  if(!v) return {cls:"",text:t("eta_hint")};
+  if(v.tier==="other") return {cls:"warn",text:t("eta_unknown")};
+  const now=new Date(), cutoff=new Date(now); cutoff.setHours(S.config.cutoffHour,0,0,0);
+  if(v.tier==="same"){
+    if(now<=cutoff) return {cls:"ok",text:t("eta_same_ok")(LANG==="hi"?"रात 8 बजे":"8 PM")};
+    return {cls:"warn",text:t("eta_same_late")};
+  }
+  const days=v.tier==="next"?1:2;
+  const dt=new Date(); dt.setDate(dt.getDate()+days);
+  return {cls:"ok",text:(v.tier==="next"?t("eta_next"):t("eta_next2"))(fmtD(dt))};
+}
+function newOrderId(){const d=new Date();const y=String(d.getFullYear()).slice(2),m=String(d.getMonth()+1).padStart(2,"0"),dd=String(d.getDate()).padStart(2,"0");return `GD${y}${m}${dd}${Math.floor(1000+Math.random()*9000)}`}
+
+let draft=null;
+function openCheckout(){
+  draft = draft||{name:"",phone:"",email:"",addr:"",villageId:"",mode:"UPI"};
+  sheet(`<button class="x" id="sx" aria-label="Close">✕</button><h3>${t("checkout_title")}</h3>
+    <form id="ck" novalidate>
+      <label>${t("full_name")}<input id="f-name" value="${esc(draft.name)}" autocomplete="name" required></label>
+      <label>${t("mobile")}<input id="f-phone" value="${esc(draft.phone)}" inputmode="tel" autocomplete="tel" required></label>
+      <label>${t("email")}<input id="f-email" type="email" value="${esc(draft.email)}" autocomplete="email" required></label>
+      <label>${t("address")}<textarea id="f-addr" rows="2" required>${esc(draft.addr)}</textarea></label>
+      <label>${t("pick_village")}
+        <div class="villagewrap">
+          <select id="f-village">
+            <option value="">${t("village_placeholder")}</option>
+            ${S.config.villages.map(v=>`<option value="${v.id}" ${draft.villageId===v.id?"selected":""}>${villageName(v)}</option>`).join("")}
+          </select>
+          <button type="button" class="locbtn" id="useLoc">${ICON.pin}${t("use_location")}</button>
+        </div>
+      </label>
+      <div class="eta" id="eta"></div>
+      <p class="sec-label" style="margin:6px 0 0">${t("payment")}</p>
+      <div class="upi-pref" id="payBox"></div>
+      <div class="tot"><span>${t("checkout_title")==t("checkout_title")?t("total"):""}</span><span>${rs(cartTotal())}</span></div>
+      <div class="policy">${policyHtml()}</div>
+      <label class="agree"><input type="checkbox" id="f-agree"> ${t("agree")}</label>
+      <div class="err" id="ckErr"></div>
+      <button class="cta" type="submit" id="ckSubmit">${t("continue_pay")}</button>
+      <button type="button" class="cod-link" id="codLink"></button>
+    </form>`);
+  $("#sx").onclick=closeSheet;
+  const vSel=$("#f-village");
+  const updEta=()=>{ const v=villageById(vSel.value); $("#eta").className="eta "+(v?etaForVillage(v).cls:""); $("#eta").textContent = v?etaForVillage(v).text:t("eta_hint"); };
+  vSel.onchange=updEta; updEta();
+  $("#useLoc").onclick=()=>{
+    $("#eta").className="eta"; $("#eta").textContent=t("locating");
+    if(!navigator.geolocation){ $("#eta").className="eta bad"; $("#eta").textContent=t("loc_denied"); return; }
+    navigator.geolocation.getCurrentPosition(pos=>{
+      const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};
+      const zone=S.config.zone;
+      if(zone && zone.lat!=null && zone.lng!=null && zone.radiusKm>0 && haversineKm(loc,{lat:zone.lat,lng:zone.lng})<=zone.radiusKm){
+        // Inside the owner-set same-day zone (center+radius): treat as the fastest (Pipariya town) tier
+        // regardless of which village is geographically nearest.
+        const sameV=S.config.villages.find(v=>v.tier==="same")||S.config.villages[0];
+        vSel.value=sameV.id; updEta(); toast(LANG==="hi"?"आप पिपरिया डिलीवरी ज़ोन में हैं":"You're inside the same-day delivery zone");
+        return;
+      }
+      const near=nearestVillage(loc);
+      if(near){ vSel.value=near.id; updEta(); toast((LANG==="hi"?"नजदीकी गांव: ":"Nearest match: ")+villageName(near)); }
+    }, ()=>{ $("#eta").className="eta bad"; $("#eta").textContent=t("loc_denied"); }, {timeout:6000});
+  };
+  const payUI=()=>{
+    $("#payBox").innerHTML = draft.mode==="UPI" ? `<span><b>${t("upi_main")}</b></span><small>${t("upi_sub")}</small>` : `<span><b>${t("cod_main")}</b></span><small style="color:var(--muted)">${t("cod_sub")}</small>`;
+    $("#ckSubmit").textContent = draft.mode==="UPI"?t("continue_pay"):t("place_cod");
+    $("#codLink").textContent = draft.mode==="UPI"?t("cant_pay_online"):t("pay_upi_instead");
+  };
+  $("#codLink").onclick=()=>{draft.mode=draft.mode==="UPI"?"COD":"UPI";payUI()};
+  payUI();
+  $("#ck").onsubmit=e=>{
+    e.preventDefault();
+    Object.assign(draft,{name:$("#f-name").value.trim(),phone:$("#f-phone").value.trim(),email:$("#f-email").value.trim(),addr:$("#f-addr").value.trim(),villageId:vSel.value});
+    if(!draft.name||!/^\d{10}$/.test(draft.phone.replace(/\D/g,"").slice(-10))||!draft.addr){$("#ckErr").textContent=t("err_fill");return}
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email)){$("#ckErr").textContent=t("err_email");return}
+    if(!draft.villageId){$("#ckErr").textContent=t("err_village");return}
+    if(!$("#f-agree").checked){$("#ckErr").textContent=t("err_agree");return}
+    for(const c of S.cart){ if(c.qty>stockFor(c.id,c.size)){ $("#ckErr").textContent=t("err_stock")(pName(byId(c.id)),c.size,stockFor(c.id,c.size)); return; } }
+    const order={id:newOrderId(),at:new Date().toISOString(),name:draft.name,phone:draft.phone,email:draft.email,villageId:draft.villageId,addr:draft.addr,items:S.cart.map(c=>({...c})),amount:cartTotal(),mode:draft.mode,utr:"",status:draft.mode==="COD"?"COD":"Awaiting UTR",stage:"Booked"};
+    draft.mode==="UPI"?openUpi(order):placeOrder(order);
+  };
+}
+function openUpi(order){
+  const link=`upi://pay?pa=${encodeURIComponent(SHOP.upiId)}&pn=${encodeURIComponent(SHOP.upiName)}&am=${order.amount}&cu=INR&tn=${order.id}`;
+  sheet(`<h3>${t("pay_title")(order.amount)}</h3>
+    <div class="upi-box">
+      <div>${t("order_id")} <span class="oid" id="oid">${order.id}</span> <button class="copy" id="cpy">${t("copy")}</button></div>
+      <div id="qr" aria-label="UPI QR code"></div>
+      <small style="color:var(--muted)">${t("scan_hint")}<br>Demo UPI ID: ${SHOP.upiId}</small>
+      <a href="${link}" class="copy">${t("open_upi")}</a>
+    </div>
+    <form id="utrF" style="margin-top:12px">
+      <label>${t("utr_label")}<input id="f-utr" inputmode="numeric" maxlength="12" placeholder="e.g. 627812345671"></label>
+      <div class="err" id="utrErr"></div>
+      <button class="cta" type="submit">${t("confirm_paid")}</button>
+      <button class="cta" type="button" id="backCk" style="background:var(--chip);color:var(--fg)">${t("back_btn")}</button>
+    </form>`);
+  try{ new QRCode($("#qr"),{text:link,width:180,height:180,correctLevel:QRCode.CorrectLevel.M}); }catch(e){ $("#qr").textContent=link; }
+  $("#cpy").onclick=()=>{navigator.clipboard?.writeText(order.id).then(()=>toast(LANG==="hi"?"ऑर्डर ID कॉपी हुई":"Order ID copied")).catch(()=>{const r=document.createRange();r.selectNode($("#oid"));getSelection().removeAllRanges();getSelection().addRange(r)})};
+  $("#backCk").onclick=openCheckout;
+  $("#utrF").onsubmit=e=>{e.preventDefault();const u=$("#f-utr").value.trim();
+    if(!/^\d{12}$/.test(u)){$("#utrErr").textContent=t("utr_err");return}
+    order.utr=u;order.status="Pending check";placeOrder(order)};
+}
+function proformaText(order){
+  const v=villageById(order.villageId);
+  return `PROFORMA — ORDER CONFIRMATION (not a tax invoice)
+${SHOP.name}, Pipariya
+Order ID: ${order.id}        Date: ${fmtDT(order.at)}
+Customer: ${order.name} · ${order.phone}
+Deliver to: ${order.addr}, ${v?v.name:""}
+------------------------------------------------
+${order.items.map(i=>{const pr=byId(i.id);return `${pr.name} (${i.size}) x${i.qty}  ${rs(pr.price*i.qty)}`}).join("\n")}
+------------------------------------------------
+Total: ${rs(order.amount)}   Payment: ${order.mode}
+${etaForVillage(v).text}
+This confirms your booking. A GST tax invoice will be emailed when your order is delivered.`;
+}
+function invoiceText(order){
+  let taxable=0, tax=0;
+  const lines=order.items.map(i=>{const pr=byId(i.id); const rate=pr.gstRate||GST_RATE(pr.price); const base=pr.price*i.qty; const tv=base*rate/100; taxable+=base; tax+=tv;
+    return `${pr.name} (${i.size}) x${i.qty}  HSN 6204  @${rate}% GST   ${rs(base)}`}).join("\n");
+  const v=villageById(order.villageId);
+  return `TAX INVOICE
+${SHOP.name} — Prop. ${SHOP.owner}
+GSTIN: ${SHOP.gstin}
+Invoice No: INV-${order.id}   Date: ${fmtDT(order.deliveredAt||order.at)}
+Bill/Ship to: ${order.name}, ${order.addr}, ${v?v.name:""}
+------------------------------------------------
+${lines}
+------------------------------------------------
+Taxable value: ${rs(taxable)}
+CGST: ${rs(tax/2)}
+SGST: ${rs(tax/2)}
+Total: ${rs(taxable+tax)}
+(GST rate and GSTIN shown are illustrative for this demo — confirm actual HSN code and rate with your CA once registered.)`;
+}
+async function placeOrder(order){
+  if(apiConfigured()){
+    try{
+      const resp = await apiPost("placeOrder", {
+        name:order.name, phone:order.phone, email:order.email, address:order.addr, village_id:order.villageId,
+        payment_mode:order.mode, amount:order.amount, utr:order.utr||"",
+        items: order.items.map(c=>({product_id:c.id, size:c.size, qty:c.qty, unit_price:byId(c.id).price}))
+      });
+      if(resp.order_id) order.id = resp.order_id;
+      if(resp.cancel_window_ends_at) order.cancelWindowEndsAt = resp.cancel_window_ends_at;
+    }catch(err){
+      console.warn("Geeta Dresses: placeOrder API failed, saving locally only.", err);
+    }
+  }
+  for(const c of order.items) S.stock[c.id][c.size]=Math.max(0,(S.stock[c.id][c.size]||0)-c.qty);
+  S.orders.unshift(order); S.cart=[]; draft=null; save(); syncChrome();
+  sheet(`<div class="done"><div class="tick">✓</div><h3>${t("order_placed")}</h3>
+    <p>${t("order_id")} <span class="oid">${order.id}</span></p>
+    <p style="color:var(--muted);margin:6px 0">${order.mode==="UPI"?t("utr_note")(order.utr):t("cod_note")(order.amount)}</p>
+    <div class="eta ok" style="margin:10px 0">${etaForVillage(villageById(order.villageId)).text}</div>
+    <div class="policy" style="text-align:left;margin-bottom:10px">${policyHtml()}</div>
+    <details class="emailprev"><summary>${t("email_sent")(esc(order.email))}</summary>
+      <div class="emailbox"><div class="hdr">To: ${esc(order.email)} · Subject: Your Geeta Dresses order ${order.id}</div><div class="invoice">${proformaText(order)}</div></div>
+    </details>
+    <p style="font-size:13px;color:var(--muted);margin-top:10px">${t("screenshot")}</p>
+    <button class="cta" id="ok">${t("keep_browsing")}</button></div>`);
+  $("#ok").onclick=closeSheet;
+}
+
+/* ================= My Orders (customer) ================= */
+function stageIndex(o){ return o.stage==="Delivered"?2:o.stage==="Dispatched"?1:0 }
+function cancellable(o){
+  if(o.stage!=="Booked") return false;
+  if(o.cancelWindowEndsAt) return Date.now() <= new Date(o.cancelWindowEndsAt).getTime();
+  return (Date.now()-new Date(o.at).getTime()) <= CANCEL_WINDOW_HOURS*3600*1000;
+}
+function reportDeadline(o){
+  if(o.reportDeadline) return new Date(o.reportDeadline).getTime();
+  return o.deliveredAt ? new Date(o.deliveredAt).getTime()+ISSUE_WINDOW_HOURS*3600*1000 : null;
+}
+function hoursLeft(ms){ return Math.max(0, Math.ceil((ms-Date.now())/3600000)) }
+function suggestResolution(order){
+  const it=order.items[0];
+  return stockFor(it.id,it.size)>0
+    ? (LANG==="hi"?`उसी आइटम का एक्सचेंज, साइज ${it.size} (स्टॉक में है)।`:`Exchange for the same item, size ${it.size} (in stock).`)
+    : (LANG==="hi"?"यह साइज स्टॉक में नहीं है — इसकी जगह रिफंड दिया जाएगा।":"Requested size is out of stock — refund instead.");
+}
+function renderOrdersView(){
+  $("#ordersList").innerHTML = `<p style="color:var(--muted);font-size:13px">${t("ask_mobile")}</p>`;
+}
+/* Maps one Orders-tab row (as returned by Code.gs's action=orders / action=all) into this page's order shape. */
+function mapApiOrder(o){
+  const issue = (o.issues && o.issues[0]) || null;
+  return {
+    id:o.id, at:o.placedAt, name:o.name, phone:o.phone, email:o.email, villageId:o.villageId, addr:o.address,
+    items:(o.items||[]).map(it=>({id:it.productId, size:it.size, qty:it.qty})),
+    amount:o.amount, mode:o.paymentMode, utr:o.utr, status:o.status, stage:o.status,
+    otp:o.otp, dispatchedAt:o.dispatchedAt, deliveredAt:o.deliveredAt,
+    cancelWindowEndsAt:o.cancelWindowEndsAt, reportDeadline:(issue&&issue.reportDeadline)||null,
+    issue: issue ? { type: issue.type==="Size issue"?"size":"defect", status: issue.status==="Pending"?"Under review":issue.status, resolution:issue.resolution, photos: issue.photoLink?[issue.photoLink]:[] } : null
+  };
+}
+$("#lookupForm").onsubmit=async e=>{
+  e.preventDefault();
+  const ph=lastDigits($("#lk-phone").value,10);
+  if(!ph || ph.length<10){ $("#ordersList").innerHTML=`<p class="err">${t("invalid_mobile")}</p>`; return; }
+  if(apiConfigured()){
+    try{
+      const data = await apiGetOrdersByPhone(ph);
+      (data.orders||[]).map(mapApiOrder).forEach(o=>{
+        const idx=S.orders.findIndex(x=>x.id===o.id);
+        if(idx>=0) S.orders[idx]=o; else S.orders.unshift(o);
+      });
+      save();
+    }catch(err){ console.warn("Geeta Dresses: orders lookup API failed, showing local data only.", err); }
+  }
+  const mine=S.orders.filter(o=>lastDigits(o.phone,10)===ph);
+  if(!mine.length){ $("#ordersList").innerHTML=`<p style="color:var(--muted)">${t("none_found")}</p>`; return; }
+  $("#ordersList").innerHTML = mine.map(orderCardHTML).join("");
+  wireOrderCards();
+};
+function orderCardHTML(o){
+  const cancelOk=cancellable(o);
+  const dl=reportDeadline(o); const within = dl && Date.now()<=dl;
+  const v=villageById(o.villageId);
+  const stageLbl=(st)=>st==="Booked"?t("booked"):st==="Dispatched"?t("dispatched"):st==="Delivered"?t("delivered"):t("cancelled");
+  return `<div class="order-card" data-id="${o.id}">
+    <div class="top"><div><b>${o.id}</b><div style="color:var(--muted);font-size:12px">${fmtDT(o.at)} · ${rs(o.amount)} · ${v?villageName(v):""}</div></div><span class="pill ${o.stage==="Cancelled"?"p-bad":"p-cod"}">${stageLbl(o.stage)}</span></div>
+    ${o.stage==="Cancelled"?`<div class="cancelled-banner">${t("cancelled_note")}</div>`:`
+    <div class="stepper">
+      <div class="step ${stageIndex(o)>=0?"on":""} ${stageIndex(o)===0?"now":""}"><div class="dot"></div>${t("booked")}</div>
+      <div class="step ${stageIndex(o)>=1?"on":""} ${stageIndex(o)===1?"now":""}"><div class="dot"></div>${t("dispatched")}</div>
+      <div class="step ${stageIndex(o)>=2?"on":""} ${stageIndex(o)===2?"now":""}"><div class="dot"></div>${t("delivered")}</div>
+    </div>`}
+    ${o.stage==="Dispatched" ? `<div>${t("otp_line")()}<span class="otp-chip">${o.otp}</span></div>`:""}
+    ${o.items.map(i=>`<div style="font-size:13px;color:var(--muted)">${pName(byId(i.id))} · ${i.size} × ${i.qty}</div>`).join("")}
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="mini-btn" data-act="proforma">${t("proforma")}</button>
+      ${o.stage==="Delivered"?`<button class="mini-btn" data-act="invoice">${t("invoice")}</button>`:""}
+      ${cancelOk?`<button class="mini-btn danger" data-act="cancel">${t("cancel_order")}</button>`:""}
+    </div>
+    ${o.stage==="Delivered" && !o.issue && within ? `<div class="issue-form"><p class="sec-label" style="margin:0">${t("report_hdr")(hoursLeft(dl))}</p>
+      <div class="radio-row"><label><input type="radio" name="itype-${o.id}" value="size" checked>${t("size_issue")}</label><label><input type="radio" name="itype-${o.id}" value="defect">${t("mfg_defect")}</label></div>
+      <input type="file" accept="image/*" multiple data-role="issuephotos">
+      <textarea rows="2" placeholder="${t("note_ph")}" data-role="issuenote"></textarea>
+      <div class="err" data-role="issueErr"></div>
+      <button class="cta ghost" data-act="submitIssue">${t("submit_report")}</button></div>`:""}
+    ${o.stage==="Delivered" && !o.issue && !within ? `<p style="font-size:12px;color:var(--muted)">${t("window_closed")}</p>`:""}
+    ${o.issue ? `<div class="issue-form"><span class="issue-pill ${o.issue.status==="Approved"?"p-ok":o.issue.status==="Rejected"?"p-bad":"p-wait"}" style="background:var(--chip)">${o.issue.type==="size"?t("size_issue"):t("mfg_defect")} — ${o.issue.status}</span>
+      ${o.issue.status==="Under review"?`<p style="font-size:12px;color:var(--muted)">${t("under_review")}</p>`:`<p style="font-size:13px">${esc(o.issue.resolution||"")}</p>`}
+      <div class="thumbs">${(o.issue.photos||[]).map(ph=>`<img src="${ph}" alt="">`).join("")}</div></div>`:""}
+  </div>`;
+}
+function wireOrderCards(){
+  document.querySelectorAll(".order-card").forEach(card=>{
+    const id=card.dataset.id, o=S.orders.find(x=>x.id===id);
+    card.onclick=e=>{
+      const act=e.target.closest("[data-act]")?.dataset.act; if(!act) return;
+      if(act==="proforma") sheet(`<button class="x" id="sx">✕</button><h3>${t("proforma")}</h3><div class="invoice">${proformaText(o)}</div>`), $("#sx").onclick=closeSheet;
+      if(act==="invoice") sheet(`<button class="x" id="sx">✕</button><h3>${t("invoice")}</h3><div class="invoice">${invoiceText(o)}</div>`), $("#sx").onclick=closeSheet;
+      if(act==="cancel"){
+        card.querySelector('[data-act="cancel"]').outerHTML=`<div class="inline-confirm">${t("cancel_q")}<button class="mini-btn danger" data-act="cancelYes">${t("yes_cancel")}</button><button class="mini-btn" data-act="cancelNo">${t("keep_it")}</button></div>`;
+      }
+      if(act==="cancelYes"){
+        (async()=>{
+          if(apiConfigured()){
+            try{ await apiPost("cancelOrder", {order_id:o.id, phone:o.phone}); }
+            catch(err){ console.warn("Geeta Dresses: cancelOrder API failed, cancelling locally only.", err); }
+          }
+          for(const it of o.items) S.stock[it.id][it.size]=(S.stock[it.id][it.size]||0)+it.qty;
+          o.stage="Cancelled"; save(); toast(t("cancelled_toast")); renderOrdersView(); $("#lookupForm").requestSubmit();
+        })();
+      }
+      if(act==="cancelNo"){ renderOrdersView(); $("#lookupForm").requestSubmit(); }
+      if(act==="submitIssue"){
+        const type=card.querySelector(`input[name="itype-${id}"]:checked`).value;
+        const note=card.querySelector('[data-role="issuenote"]').value.trim();
+        const files=card.querySelector('[data-role="issuephotos"]').files;
+        if(!files.length){ card.querySelector('[data-role="issueErr"]').textContent=t("need_photo"); return; }
+        const readers=[...files].slice(0,3).map(f=>new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(f)}));
+        Promise.all(readers).then(async photos=>{
+          if(apiConfigured()){
+            try{
+              // Demo note: Code.gs just stores whatever string is sent in photo_link (meant for a
+              // pasted Drive link) — here we pass the first captured photo as a data URL instead,
+              // so no separate upload step is needed for this demo.
+              await apiPost("reportIssue", { order_id:o.id, type: type==="size"?"Size issue":"Manufacturing defect", note, photo_link: photos[0]||"" });
+            }catch(err){ console.warn("Geeta Dresses: reportIssue API failed, saving locally only.", err); }
+          }
+          o.issue={type,note,photos,status:"Under review",at:new Date().toISOString()};
+          save(); toast(t("reported_toast")); renderOrdersView(); $("#lookupForm").requestSubmit();
+        });
+      }
+    };
+  });
+}
+
+/* Owner console moved to owner.html (separate page, shares this page's STORE_KEY in localStorage). */
+
+/* ================= Boot ================= */
+(async function boot(){
+  const loadingEl=document.createElement("div");
+  loadingEl.id="bootLoading";
+  loadingEl.style.cssText="position:absolute;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--muted);font-size:14px";
+  loadingEl.textContent = LANG==="hi" ? "लोड हो रहा है…" : "Loading…";
+  $("#app").appendChild(loadingEl);
+  await loadFromApi();
+  loadingEl.remove();
+  document.querySelectorAll("#langtog button").forEach(b=>b.classList.toggle("on",b.dataset.l===LANG));
+  applyStaticLabels();
+  const hashId=location.hash.slice(1);
+  go({screen:"land",step:"cat"}, true);
+  if(hashId && byId(hashId)) setTimeout(()=>openDetails(hashId),50);
+})();
+</script>
