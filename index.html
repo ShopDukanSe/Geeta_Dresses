@@ -343,7 +343,7 @@ const STORE_KEY = "gd_demo_v3";
 /* ================= Real backend (Google Sheet via Apps Script Web App) ================= */
 /* Paste the /exec URL from Deploy > New deployment (type "Web app") here. Same placeholder
    string in owner.html — a single find-replace fills both once you have deployed Code.gs. */
-const API_URL = "https://script.google.com/a/macros/rentomojo.com/s/AKfycbxSFITh2HaA8BOfuGsQFxwMbfBhtjzqS6IetJujjYH8NVrWeWMKDzDBrZ1IBlh78R9IvA/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbw4KrkN3F6oWTDto9RVRtMmfrgbaE3g3qP6tD6BqoTNzecpj0beAmiEpkCc1yzoQq0/exec";
 function apiConfigured(){ return typeof API_URL==="string" && API_URL && !API_URL.includes("PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE"); }
 async function apiGetAll(){
   const res = await fetch(API_URL + (API_URL.includes("?")?"&":"?") + "action=all");
