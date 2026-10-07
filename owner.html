@@ -115,7 +115,7 @@ input,select,textarea{font:inherit;color:var(--fg);background:var(--surface);bor
 /* ================= Real backend (Google Sheet via Apps Script Web App) ================= */
 /* Paste the /exec URL from Deploy > New deployment (type "Web app") here. Same placeholder
    string as catalogue.html — a single find-replace fills both once you have deployed Code.gs. */
-const API_URL = "https://script.google.com/a/macros/rentomojo.com/s/AKfycbxSFITh2HaA8BOfuGsQFxwMbfBhtjzqS6IetJujjYH8NVrWeWMKDzDBrZ1IBlh78R9IvA/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbw4KrkN3F6oWTDto9RVRtMmfrgbaE3g3qP6tD6BqoTNzecpj0beAmiEpkCc1yzoQq0/exec";
 function apiConfigured(){ return typeof API_URL==="string" && API_URL && !API_URL.includes("PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE"); }
 /* Owner console needs Orders/Issues too, which the public action=all deliberately omits
    (it's callable by anyone who finds API_URL in the page source). So once logged in, this
