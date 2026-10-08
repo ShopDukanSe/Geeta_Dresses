@@ -272,7 +272,6 @@ body{margin:0}
       <svg class="hero-motif" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 6C38 20 30 28 30 42c0 14 9 24 20 24s20-10 20-24c0-14-8-22-20-36z" fill="none" stroke="#fff" stroke-width="1.1"/><circle cx="50" cy="70" r="3" fill="#fff"/><path d="M20 66c10-4 20-2 30 4M80 66c-10-4-20-2-30 4" stroke="#fff" stroke-width="1" fill="none"/></svg>
       <div class="hero-top">
         <div class="langtog" id="langtog"><button data-l="hi">हिं</button><button data-l="en">EN</button></div>
-        <a class="owner-btn" href="owner.html">Shop owner</a>
       </div>
       <div class="brand">
         <h1>Geeta Dresses</h1>
@@ -379,18 +378,30 @@ async function apiGetOrdersByPhone(phone){
   if(!data || data.ok===false) throw new Error((data && data.error) || "API error");
   return data;
 }
-/* Apps Script Web Apps can't set custom CORS headers, and a JSON POST triggers a preflight
-   it can't answer — so we send text/plain and the server does JSON.parse(e.postData.contents). */
 /* Sent as GET (not POST) because Apps Script Web App POST responses often come back without
    an Access-Control-Allow-Origin header once the page is hosted on a different origin (e.g.
    GitHub Pages) — the browser then blocks reading the response even though the call itself
-   succeeds. GET doesn't have this problem, so the action+payload travels as a JSON query param. */
+   succeeds. GET doesn't have this problem, so the action+payload travels as a JSON query param.
+   This is why a base64 photo must NEVER go through this function — see apiPostBig below. */
 async function apiPost(action, payload){
   const url = API_URL + (API_URL.includes("?")?"&":"?") + "action=" + encodeURIComponent(action) + "&data=" + encodeURIComponent(JSON.stringify(Object.assign({action}, payload)));
   const res = await fetch(url);
   const data = await res.json();
   if(!data || data.ok===false) throw new Error((data && data.error) || "API error");
   return data;
+}
+/* A base64 image (payment screenshot / issue photo) is far too big for a URL query string, so it
+   silently failed via apiPost above. This sends it as a real POST body instead. mode:"no-cors" +
+   text/plain avoids both the CORS-preflight problem and the CORS-response problem noted above:
+   the request reaches Code.gs and executes fine, we just can't read its reply — fire-and-forget,
+   called AFTER the order/issue row already exists (via a normal apiPost) so there's an id to
+   attach the photo to. */
+function apiPostBig(action, payload){
+  if(!apiConfigured()) return;
+  return fetch(API_URL, {
+    method:"POST", mode:"no-cors", headers:{"Content-Type":"text/plain;charset=utf-8"},
+    body: JSON.stringify(Object.assign({action}, payload))
+  }).catch(err=>console.warn("Geeta Dresses: "+action+" (big) API failed.", err));
 }
 const DEFAULT_CUTOFF_HOUR = 16; // 4 PM same-day cutoff default — owner-editable at runtime via S.config.cutoffHour
 
@@ -1197,11 +1208,13 @@ async function placeOrder(order){
     try{
       const resp = await apiPost("placeOrder", {
         name:order.name, phone:order.phone, email:order.email, address:order.addr, village_id:order.villageId,
-        payment_mode:order.mode, amount:order.amount, utr:order.utr||"", payment_screenshot:order.payment_screenshot||"",
+        payment_mode:order.mode, amount:order.amount, utr:order.utr||"",
         items: order.items.map(c=>({product_id:c.id, size:c.size, qty:c.qty, unit_price:byId(c.id).price}))
       });
       if(resp.order_id) order.id = resp.order_id;
       if(resp.cancel_window_ends_at) order.cancelWindowEndsAt = resp.cancel_window_ends_at;
+      // Payment screenshot goes separately (see apiPostBig) — it's too big for the GET above.
+      if(order.payment_screenshot && resp.order_id) apiPostBig("attachPhoto", {sheet:"Orders", id_field:"order_id", id:resp.order_id, field:"payment_screenshot", value:order.payment_screenshot});
     }catch(err){
       console.warn("Geeta Dresses: placeOrder API failed, saving locally only.", err);
     }
@@ -1336,9 +1349,11 @@ function wireOrderCards(){
           if(apiConfigured()){
             try{
               // Demo note: Code.gs just stores whatever string is sent in photo_link (meant for a
-              // pasted Drive link) — here we pass the first captured photo as a data URL instead,
-              // so no separate upload step is needed for this demo.
-              await apiPost("reportIssue", { order_id:o.id, type: type==="size"?"Size issue":"Manufacturing defect", note, photo_link: photos[0]||"" });
+              // pasted Drive link) — here we pass the first captured photo as a data URL instead.
+              // The photo itself goes separately via apiPostBig, same reasoning as placeOrder's
+              // payment screenshot — a base64 image is too big for the GET request below.
+              const resp = await apiPost("reportIssue", { order_id:o.id, type: type==="size"?"Size issue":"Manufacturing defect", note });
+              if(photos[0] && resp.issue_id) apiPostBig("attachPhoto", {sheet:"Issues", id_field:"issue_id", id:resp.issue_id, field:"photo_link", value:photos[0]});
             }catch(err){ console.warn("Geeta Dresses: reportIssue API failed, saving locally only.", err); }
           }
           o.issue={type,note,photos,status:"Under review",at:new Date().toISOString()};
