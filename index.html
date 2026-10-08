@@ -64,7 +64,9 @@ a{color:#fff}
 .promo-rail{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:10px;padding:12px 16px 2px;scrollbar-width:none}
 .promo-rail::-webkit-scrollbar{display:none}
 .promo-rail img{flex:0 0 86%;scroll-snap-align:center;border-radius:14px;width:86%;aspect-ratio:12/5;object-fit:cover;box-shadow:0 8px 18px rgba(20,10,15,.18)}
-body.sheet-open .cartstrip{display:none}
+.subcta{position:absolute;left:8px;right:8px;bottom:68px;z-index:16}
+.subcta .cta{width:100%;box-shadow:0 6px 18px rgba(30,5,15,.3)}
+body.sheet-open .cartstrip,body.step-sub .cartstrip{display:none}
 
 .quickcats{display:flex;gap:16px;overflow-x:auto;padding:4px 2px}
 .qc{display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:0;flex:0 0 auto}
@@ -327,6 +329,7 @@ body{margin:0}
 
   <!-- Persistent bottom bar (all customer screens) -->
   <div class="cartstrip" id="cartStrip" hidden></div>
+  <div class="subcta" id="subCta" hidden><button class="cta" id="startFeed"></button></div>
   <nav class="tabbar" id="tabbar">
     <button data-tab="land" aria-label="Home"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 9v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9"/></svg><span data-k="nav_home">Home</span></button>
     <button data-tab="orders" aria-label="My Orders"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg><span data-k="nav_orders">My Orders</span></button>
@@ -758,7 +761,10 @@ function applyState(st){
   if(st.screen==="orders"){ show("orders"); renderOrdersView(); }
   syncChrome();
 }
-window.onpopstate=e=>{ if(e.state) applyState(e.state); else applyState({screen:"land",step:"cat"}); };
+window.onpopstate=e=>{
+  if(e.state && e.state.screen==="pay"){ openUpi(e.state.order, true); return; }
+  if(e.state) applyState(e.state); else applyState({screen:"land",step:"cat"});
+};
 function show(v){["land","feed","orders"].forEach(x=>$("#v-"+x).hidden=(x!==v))}
 function syncChrome(){
   // Tabbar + cart strip are now persistent across every customer screen, including the feed.
@@ -826,11 +832,13 @@ let selCat=null, selSubs=new Set(), step="cat";
 function renderLanding(){
   $("#policyLand").innerHTML=policyHtml();
   $("#quickcats").innerHTML=[...new Set(PRODUCTS.map(p=>p.cat))].map(c=>`<button class="qc" data-cat="${c}"><span class="ring"><img src="${CAT_COVER[c]}" alt=""></span><span>${catL(c)}</span></button>`).join("");
+  document.body.classList.toggle("step-sub", step==="sub");
   if(step==="cat"){
     $("#stepHead").innerHTML=`<h2>${t("step_cat")}</h2><div class="step-dots"><i class="on"></i><i></i></div>`;
     const cats=[...new Set(PRODUCTS.map(p=>p.cat))];
     $("#cats").innerHTML=cats.map(c=>`<button class="cat" data-cat="${c}"><img src="${CAT_COVER[c]}" alt=""><div class="catlabel"><b>${catL(c)}</b><small>${PRODUCTS.filter(p=>p.cat===c).length}</small></div></button>`).join("")
      + `<button class="cat" data-cat="__all"><img src="${PRODUCTS[3].photos[3]}" alt=""><div class="catlabel"><b>${LANG==="hi"?"सब देखें":"Show everything"}</b><small>${PRODUCTS.length}</small></div></button>`;
+    $("#subCta").hidden=true;
     return;
   }
   $("#stepHead").innerHTML=`<button class="owner-btn" id="stepBack" aria-label="Back">←</button><h2>${catL(selCat)}${t("step_sub")}</h2><div class="step-dots"><i class="on"></i><i class="on"></i></div>`;
@@ -838,16 +846,17 @@ function renderLanding(){
   const subs=[...new Set(PRODUCTS.filter(p=>p.cat===selCat).map(p=>p.sub))];
   $("#cats").innerHTML=subs.map(sb=>{const items=PRODUCTS.filter(p=>p.cat===selCat&&p.sub===sb);
     return `<button class="cat" data-sub="${sb}" aria-pressed="${selSubs.has(sb)}"><img src="${items[0].photos[0]}" alt=""><div class="catlabel"><b>${subL(sb)}</b><small>${items.length}</small></div></button>`}).join("")
-    + (subs.length>1?`<button class="cat" data-sub="__all" aria-pressed="${!selSubs.size}"><img src="${CAT_COVER[selCat]}" alt=""><div class="catlabel"><b>${LANG==="hi"?"सभी "+catL(selCat):"All "+catL(selCat)}</b><small>${PRODUCTS.filter(p=>p.cat===selCat).length}</small></div></button>`:"")
-    + `<button class="cta" id="startFeed" style="grid-column:1/-1;margin-top:4px">${t("see_items")(filtered().length)}</button>`;
+    + (subs.length>1?`<button class="cat" data-sub="__all" aria-pressed="${!selSubs.size}"><img src="${CAT_COVER[selCat]}" alt=""><div class="catlabel"><b>${LANG==="hi"?"सभी "+catL(selCat):"All "+catL(selCat)}</b><small>${PRODUCTS.filter(p=>p.cat===selCat).length}</small></div></button>`:"");
+  $("#subCta").hidden=false;
+  $("#startFeed").textContent=t("see_items")(filtered().length);
 }
 function filtered(){
   if(!selCat) return [];
   if(selCat==="__all") return PRODUCTS;
   return PRODUCTS.filter(p=>p.cat===selCat && (!selSubs.size||selSubs.has(p.sub)));
 }
+$("#startFeed").onclick=()=>go({screen:"feed",cat:selCat,subs:[...selSubs]});
 $("#cats").onclick=e=>{
-  const go2=e.target.closest("#startFeed"); if(go2){ go({screen:"feed",cat:selCat,subs:[...selSubs]}); return; }
   const b=e.target.closest(".cat");if(!b)return;
   if(b.dataset.cat){ selCat=b.dataset.cat; selSubs=new Set();
     if(selCat==="__all"){ go({screen:"feed",cat:selCat,subs:[]}); return; }
@@ -883,7 +892,9 @@ function renderFeed(){
         <button class="rbtn ${v==="dislike"?"disliked":""}" data-act="dislike" aria-label="Not for me"><span class="ic">${ICON.down}</span>${t("not_for_me")}</button>
         <button class="rbtn" data-act="info" aria-label="Details"><span class="ic">${ICON.info}</span>${t("details")}</button>
         <button class="rbtn share" data-act="share" aria-label="Share"><span class="ic">${ICON.share}</span>${t("share")}</button>
-        <button class="rbtn bag" data-act="add" aria-label="Add"><span class="ic">${ICON.bag}</span>${t("add")}</button>
+        ${total===0
+          ? `<button class="rbtn bag" data-act="oos" aria-label="Sold out" style="opacity:.55"><span class="ic">${ICON.bag}</span>${t("sold_out")}</button>`
+          : `<button class="rbtn bag" data-act="add" aria-label="Add"><span class="ic">${ICON.bag}</span>${t("add")}</button>`}
       </div>
     </article>`}).join("") + `<div class="end"><div><h3>${t("end_title")}</h3><p>${t("end_sub")}</p><button class="cta alt" id="endBack" style="margin-top:12px">${t("browse_other")}</button></div></div>`;
   $("#feed").scrollTop=0;
@@ -907,6 +918,7 @@ $("#feed").onclick=e=>{
   }
   if(act==="info") openDetails(id);
   if(act==="add") openDetails(id,true);
+  if(act==="oos") toast(t("sold_out"));
   if(act==="share") openShare(id);
 };
 
@@ -956,14 +968,18 @@ function openDetails(id, focusSize){
   const p=byId(id); let size=p.sizes.length===1?p.sizes[0]:null;
   if(size && stockFor(id,size)<=0) size=null;
   const off=Math.round((1-p.price/p.mrp)*100);
+  const totalStock=p.sizes.reduce((a,s)=>a+stockFor(id,s),0);
   sheet(`<button class="x" aria-label="Close" id="sx">✕</button>
     <h3>${esc(pName(p))}</h3>
     <div class="price" style="color:var(--fg)"><span class="now">${rs(p.price)}</span><s>${rs(p.mrp)}</s><span class="off" style="color:var(--leaf)">${off}% ${LANG==="hi"?"छूट":"off"}</span></div>
+    ${totalStock===0?`<div class="stockline out" style="margin:8px 0;font-weight:700">${t("sold_out")}</div>`:""}
     <p class="sec-label" style="margin-top:14px">${t("select_size")}</p>
     <div class="sizes" id="sz">${p.sizes.map(s=>{const n=stockFor(id,s);return `<button class="size" data-s="${s}" aria-pressed="${s===size}" ${n<=0?"disabled":""}>${s}</button>`}).join("")}</div>
     <div class="sizehint" id="szHint"></div>
     <div class="err" id="szErr"></div>
-    <button class="cta alt" id="addBtn">${t("add")}</button>
+    ${totalStock===0
+      ? `<button class="cta alt" id="addBtn" disabled style="opacity:.5">${t("sold_out")}</button>`
+      : `<button class="cta alt" id="addBtn">${t("add")}</button>`}
     <div class="share-row"><button class="wa" id="dWa">${t("share_wa")}</button><button id="dCopy">${t("share_copy")}</button></div>
     <dl class="specs">${Object.entries(p.specs).map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}<dt>${t("code")}</dt><dd>${p.id}</dd></dl>
     <div class="note">${t("delivery_note")}</div>
@@ -1094,7 +1110,11 @@ function openCheckout(){
     placeOrder(order).finally(()=>{ckSubmitting=false;});
   };
 }
-function openUpi(order){
+function openUpi(order, fromPopstate){
+  // Pushes a history entry so that if the customer hits the device/browser back button while
+  // this payment screen is open, they land back on THIS SAME screen (see onpopstate above)
+  // instead of being bounced elsewhere — avoids the "did my payment go through or not" confusion.
+  if(!fromPopstate) history.pushState({screen:"pay", order}, "");
   const link=`upi://pay?pa=${encodeURIComponent(SHOP.upiId)}&pn=${encodeURIComponent(SHOP.upiName)}&am=${order.amount}&cu=INR&tn=${order.id}`;
   sheet(`<h3>${t("pay_title")(order.amount)}</h3>
     <div class="upi-box">
@@ -1115,7 +1135,7 @@ function openUpi(order){
     </form>`);
   try{ new QRCode($("#qr"),{text:link,width:180,height:180,correctLevel:QRCode.CorrectLevel.M}); }catch(e){ $("#qr").textContent=link; }
   $("#cpy").onclick=()=>{navigator.clipboard?.writeText(order.id).then(()=>toast(LANG==="hi"?"ऑर्डर ID कॉपी हुई":"Order ID copied")).catch(()=>{const r=document.createRange();r.selectNode($("#oid"));getSelection().removeAllRanges();getSelection().addRange(r)})};
-  $("#backCk").onclick=openCheckout;
+  $("#backCk").onclick=()=>{ if(history.state && history.state.screen==="pay") history.replaceState({screen:"land",step:"cat"},""); openCheckout(); };
   let shotData="";
   $("#f-shot").onchange=async e=>{
     const f=e.target.files[0]; if(!f) return;
@@ -1166,6 +1186,10 @@ Total: ${rs(taxable+tax)}
 (GST rate and GSTIN shown are illustrative for this demo — confirm actual HSN code and rate with your CA once registered.)`;
 }
 async function placeOrder(order){
+  // Clear the "pay" history trap (see openUpi) now that the order is actually going through —
+  // otherwise a later back-press would incorrectly re-show the payment screen for an order
+  // that's already placed.
+  if(history.state && history.state.screen==="pay") history.replaceState({screen:"land",step:"cat"},"");
   if(apiConfigured()){
     try{
       const resp = await apiPost("placeOrder", {
@@ -1329,8 +1353,8 @@ function wireOrderCards(){
   const loadingEl=document.createElement("div");
   loadingEl.id="bootLoading";
   loadingEl.style.cssText="position:absolute;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--muted);font-size:14px";
-  loadingEl.textContent = LANG==="hi" ? "लोड हो रहा है…" : "Loading…";
   await askLangIfNeeded();
+  loadingEl.textContent = LANG==="hi" ? "लोड हो रहा है…" : "Loading…";
   $("#app").appendChild(loadingEl);
   await loadFromApi();
   loadingEl.remove();
