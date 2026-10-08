@@ -756,6 +756,7 @@ function go(state, replace){
   screen=state.screen; applyState(state);
 }
 function applyState(st){
+  screen=st.screen;
   if(st.screen==="land"){ selCat=st.cat||null; selSubs=new Set(st.subs||[]); step=st.step||"cat"; show("land"); renderLanding(); }
   if(st.screen==="feed"){ selCat=st.cat; selSubs=new Set(st.subs||[]); show("feed"); renderFeed(); }
   if(st.screen==="orders"){ show("orders"); renderOrdersView(); }
@@ -769,6 +770,9 @@ function show(v){["land","feed","orders"].forEach(x=>$("#v-"+x).hidden=(x!==v))}
 function syncChrome(){
   // Tabbar + cart strip are now persistent across every customer screen, including the feed.
   $("#tabbar").hidden=false;
+  const onSubStep = screen==="land" && step==="sub";
+  document.body.classList.toggle("step-sub", onSubStep);
+  $("#subCta").hidden=!onSubStep;
   document.querySelectorAll(".tabbar button").forEach(b=>b.classList.toggle("active", (b.dataset.tab==="land"&&screen==="land")||(b.dataset.tab==="orders"&&screen==="orders")));
   const n=S.cart.reduce((a,c)=>a+c.qty,0);
   $("#tabBadge").hidden=!n; $("#tabBadge").textContent=n;
@@ -832,7 +836,6 @@ let selCat=null, selSubs=new Set(), step="cat";
 function renderLanding(){
   $("#policyLand").innerHTML=policyHtml();
   $("#quickcats").innerHTML=[...new Set(PRODUCTS.map(p=>p.cat))].map(c=>`<button class="qc" data-cat="${c}"><span class="ring"><img src="${CAT_COVER[c]}" alt=""></span><span>${catL(c)}</span></button>`).join("");
-  document.body.classList.toggle("step-sub", step==="sub");
   if(step==="cat"){
     $("#stepHead").innerHTML=`<h2>${t("step_cat")}</h2><div class="step-dots"><i class="on"></i><i></i></div>`;
     const cats=[...new Set(PRODUCTS.map(p=>p.cat))];
