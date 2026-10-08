@@ -10,7 +10,7 @@
 <style>
 /* Layout: phone-frame app, Pipariya-only. Home (search + circular quick-cats + category grid) → sub-category step → vertical reel feed → My Orders → bottom sheets.
    Tabbar + cart strip persist across every customer screen, including the feed. A search icon on the feed/orders headers opens a reusable search sheet.
-   Geofencing: village picker (primary) + "use my location" (center+radius same-day zone check first, then Haversine distance → nearest village as fallback), no pincodes.
+   Geofencing: PIN code narrows to matching villages (pick one, done) → "share my location" fallback checks GPS against each village's OWN center+radius (no shared zone).
    Hindi/English toggle throughout. Owner/ops console lives in the separate owner.html, sharing this page's localStorage (STORE_KEY) — see S.config for owner-editable delivery rules. */
 :root{
   --wine:#6a1430; --rose:#a84766; --gold:#c08a2e; --marigold:#c08a2e; --madder:#ab3326; --leaf:#2f7d4f; --teal:#1f8f82;
@@ -352,7 +352,6 @@ function applyRemoteConfig(config){
   if(config.gstin) SHOP.gstin=config.gstin;
   if(config.cancel_window_hours!=null) CANCEL_WINDOW_HOURS = Number(config.cancel_window_hours)||CANCEL_WINDOW_HOURS;
   if(config.issue_report_window_hours!=null) ISSUE_WINDOW_HOURS = Number(config.issue_report_window_hours)||ISSUE_WINDOW_HOURS;
-  if(config.max_delivery_km!=null) MAX_DELIVERY_KM = Number(config.max_delivery_km)||MAX_DELIVERY_KM;
   const banners=[config.banner_1,config.banner_2,config.banner_3].filter(Boolean);
   const rail=document.getElementById("promoRail");
   if(rail){
@@ -430,8 +429,12 @@ en:{
   checkout_title:"Delivery details", full_name:"Full name", mobile:"Mobile (WhatsApp)", email:"Email (for your order confirmation)",
   address:"House / street — nearest landmark", pick_village:"Your village / area", use_location:"Use my location", locating:"Locating…",
   village_placeholder:"Select your village", village_other:"My village isn't listed",
+  pin_label:"Your area PIN code", pin_placeholder:"e.g. 461775", pin_hint:"Enter your 6-digit PIN code to see villages we deliver to.",
+  pin_no_match:"We don't yet deliver to this PIN code — try sharing your location instead, or call the shop to check.",
+  share_loc_cta:"Can't find your village? Share your location instead",
+  outside_area:"Your location is outside our delivery area right now — please call the shop to check, or try a different PIN code.",
   loc_denied:"Couldn't get your location here — please pick your village from the list.",
-  eta_hint:"Pick your village to see the delivery promise.",
+  eta_hint:"Enter your PIN code to see the delivery promise.",
   eta_same_ok:d=>`Same-day delivery — arriving today by ${d}`, eta_same_late:"Ordered after 4 PM — delivery tomorrow instead of today",
   eta_next:d=>`Next-day delivery — by ${d}`, eta_next2:d=>`Delivery in 2 days — by ${d}`,
   eta_unknown:"We'll confirm your delivery day on WhatsApp/call after booking.",
@@ -482,8 +485,12 @@ hi:{
   checkout_title:"डिलीवरी डिटेल्स", full_name:"पूरा नाम", mobile:"मोबाइल (व्हाट्सएप)", email:"ईमेल (ऑर्डर कन्फर्मेशन के लिए)",
   address:"घर / गली — पास का लैंडमार्क", pick_village:"आपका गांव / एरिया", use_location:"मेरी लोकेशन यूज़ करें", locating:"लोकेशन ढूंढ रहे हैं…",
   village_placeholder:"अपना गांव चुनें", village_other:"मेरा गांव लिस्ट में नहीं है",
+  pin_label:"आपका एरिया पिन कोड", pin_placeholder:"जैसे 461775", pin_hint:"हम जिन गांवों में डिलीवर करते हैं वो देखने के लिए 6 अंकों का पिन कोड डालें।",
+  pin_no_match:"हम अभी इस पिन कोड पर डिलीवर नहीं करते — कृपया अपनी लोकेशन शेयर करें, या दुकान पर कॉल करके पूछें।",
+  share_loc_cta:"अपना गांव नहीं मिल रहा? अपनी लोकेशन शेयर करें",
+  outside_area:"आपकी लोकेशन अभी हमारे डिलीवरी एरिया से बाहर है — कृपया दुकान पर कॉल करें, या दूसरा पिन कोड ट्राई करें।",
   loc_denied:"यहां लोकेशन नहीं मिल पाई — कृपया लिस्ट से अपना गांव चुनें।",
-  eta_hint:"डिलीवरी प्रॉमिस देखने के लिए गांव चुनें।",
+  eta_hint:"डिलीवरी प्रॉमिस देखने के लिए पिन कोड डालें।",
   eta_same_ok:d=>`आज ही डिलीवरी — ${d} तक पहुंच जाएगा`, eta_same_late:"शाम 4 बजे के बाद ऑर्डर — आज की जगह कल डिलीवरी होगी",
   eta_next:d=>`अगले दिन डिलीवरी — ${d} तक`, eta_next2:d=>`2 दिन में डिलीवरी — ${d} तक`,
   eta_unknown:"बुकिंग के बाद हम व्हाट्सएप/कॉल पर डिलीवरी का दिन कन्फर्म करेंगे।",
@@ -631,7 +638,7 @@ function mapApiProduct(p){
     sizes:(p.sizes&&p.sizes.length)?p.sizes:["Free"],
     photos:(p.photos&&p.photos.length)?p.photos:[photo("kurta","#a84766","#f6ebdd","#fbf4ec")],
     specs:p.specs||{}, qa:(p.faq||[]).map(f=>Array.isArray(f)?f:[f.q||f.question||"",f.a||f.answer||""]),
-    badge:p.badge||undefined
+    badge:p.badge||undefined, description:p.description||""
   };
 }
 const STOCK_SEED = {
@@ -643,25 +650,38 @@ const STOCK_SEED = {
 const GST_RATE = p => p<=1000 ? 5 : 12; // illustrative only — confirm actual HSN/rate with your CA after GST registration
 
 /* ================= Geofencing — sample village list (REPLACE with your real villages/coordinates) ================= */
-/* tier: 'same' = same-day (Pipariya town, 4 PM cutoff) · 'next' = next-day · 'next2' = next-to-next-day · 'other' = not yet covered */
+/* Each village now carries its OWN center point (lat/lng) + its OWN delivery radius (radiusKm) —
+   there is no single shared "zone" any more. tier is still just a delivery-speed label (same-day /
+   next-day / 2-day), separate from whether we deliver there at all.
+   Customer flow: they enter their PIN code → we show the villages whose pincode matches (pick one,
+   done, no distance check — we trust the pincode+name match). If their village isn't in that list,
+   they tap "share my location instead" and we check their GPS point against EVERY village's own
+   center+radius; whichever village's circle contains them wins (nearest if more than one does); if
+   none does, we tell them they're outside the delivery area. */
 const SHOP_LOC = {lat:22.760, lng:78.357}; // approx Pipariya — set your exact shop location for live
-const DEFAULT_ZONE_RADIUS_KM = 4.5; // same-day delivery radius around SHOP_LOC; owner-editable via S.config.zone.radiusKm
-let MAX_DELIVERY_KM = 60; // "use my location" sanity cap — beyond this the nearest configured village is almost
-                          // certainly wrong (e.g. someone testing from another city), so we refuse to guess instead
-                          // of silently picking a random nearby village. Owner-editable via config.max_delivery_km.
 /* Seeded defaults only — the live, owner-editable copy lives in S.config.villages (see seed()/config below). */
 const DEFAULT_VILLAGES = [
-  {id:"pipariya-town", name:"Pipariya Town", nameHi:"पिपरिया टाउन", lat:22.760, lng:78.357, tier:"same"},
-  {id:"sarra", name:"Sarra", nameHi:"सर्रा", lat:22.735, lng:78.330, tier:"same"},
-  {id:"matkuli", name:"Matkuli", nameHi:"मटकुली", lat:22.700, lng:78.420, tier:"next"},
-  {id:"sohagpur", name:"Sohagpur", nameHi:"सोहागपुर", lat:22.695, lng:78.185, tier:"next"},
-  {id:"bankhedi", name:"Bankhedi", nameHi:"बानखेड़ी", lat:22.600, lng:78.130, tier:"next2"},
-  {id:"other", name:"My village isn't listed", nameHi:"मेरा गांव सूची में नहीं है", lat:null, lng:null, tier:"other"},
+  {id:"pipariya-town", name:"Pipariya Town", nameHi:"पिपरिया टाउन", pincode:"461775", lat:22.760, lng:78.357, radiusKm:4.5, tier:"same"},
+  {id:"sarra", name:"Sarra", nameHi:"सर्रा", pincode:"461775", lat:22.735, lng:78.330, radiusKm:4, tier:"same"},
+  {id:"matkuli", name:"Matkuli", nameHi:"मटकुली", pincode:"461881", lat:22.700, lng:78.420, radiusKm:5, tier:"next"},
+  {id:"sohagpur", name:"Sohagpur", nameHi:"सोहागपुर", pincode:"461775", lat:22.695, lng:78.185, radiusKm:5, tier:"next"},
+  {id:"bankhedi", name:"Bankhedi", nameHi:"बानखेड़ी", pincode:"461990", lat:22.600, lng:78.130, radiusKm:6, tier:"next2"},
 ];
 function haversineKm(a,b){ const R=6371,dLat=(b.lat-a.lat)*Math.PI/180,dLng=(b.lng-a.lng)*Math.PI/180;
   const s=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2;
   return R*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s)); }
-function nearestVillage(loc){ let best=null,bd=Infinity; for(const v of S.config.villages){ if(v.lat==null) continue; const d=haversineKm(loc,v); if(d<bd){bd=d;best=v;} } return best; }
+// Villages whose OWN pincode matches what the customer typed.
+function villagesForPincode(pin){ return S.config.villages.filter(v=>String(v.pincode||"").trim()===pin); }
+// Finds which village's own center+radius contains this GPS point (nearest one, if more than one does).
+function villageForLocation(loc){
+  let best=null,bd=Infinity;
+  for(const v of S.config.villages){
+    if(v.lat==null||v.lng==null||!(Number(v.radiusKm)>0)) continue;
+    const d=haversineKm(loc,v);
+    if(d<=Number(v.radiusKm) && d<bd){ bd=d; best=v; }
+  }
+  return best;
+}
 function villageName(v){ return LANG==="hi" ? v.nameHi : v.name; }
 
 /* ================= State (demo: browser storage; live: Apps Script → Google Sheet) ================= */
@@ -717,9 +737,6 @@ async function loadFromApi(){
     if(data.config){
       applyRemoteConfig(data.config);
       if(data.config.cutoff_hour!=null) S.config.cutoffHour = Number(data.config.cutoff_hour)||S.config.cutoffHour;
-      if(data.config.zone_center_lat!=null && data.config.zone_center_lng!=null){
-        S.config.zone = { lat:Number(data.config.zone_center_lat), lng:Number(data.config.zone_center_lng), radiusKm:Number(data.config.zone_radius_km)||DEFAULT_ZONE_RADIUS_KM };
-      }
     }
     applyRemotePolicies(data.policies);
     save();
@@ -729,7 +746,7 @@ async function loadFromApi(){
 }
 function seed(){
   if(!S.stock || !Object.keys(S.stock).length) S.stock = JSON.parse(JSON.stringify(STOCK_SEED));
-  if(!S.config){ S.config = { cutoffHour: DEFAULT_CUTOFF_HOUR, villages: JSON.parse(JSON.stringify(DEFAULT_VILLAGES)), zone:{ lat:SHOP_LOC.lat, lng:SHOP_LOC.lng, radiusKm:DEFAULT_ZONE_RADIUS_KM } }; }
+  if(!S.config){ S.config = { cutoffHour: DEFAULT_CUTOFF_HOUR, villages: JSON.parse(JSON.stringify(DEFAULT_VILLAGES)) }; }
   if(S.orders.length){ save(); return; }
   const d=(n,h)=>{const x=new Date();x.setDate(x.getDate()-n);if(h)x.setHours(x.getHours()-h);return x.toISOString()};
   S.orders=[
@@ -995,6 +1012,7 @@ function openDetails(id, focusSize){
       ? `<button class="cta alt" id="addBtn" disabled style="opacity:.5">${t("sold_out")}</button>`
       : `<button class="cta alt" id="addBtn">${t("add")}</button>`}
     <div class="share-row"><button class="wa" id="dWa">${t("share_wa")}</button><button id="dCopy">${t("share_copy")}</button></div>
+    ${p.description?`<p style="margin:12px 0 0;font-size:14px;line-height:1.5">${esc(p.description)}</p>`:""}
     <dl class="specs">${Object.entries(p.specs).map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}<dt>${t("code")}</dt><dd>${p.id}</dd></dl>
     <div class="note">${t("delivery_note")}</div>
     <div class="policy" style="margin-top:10px">${policyHtml()}</div>
@@ -1059,15 +1077,8 @@ function openCheckout(){
       <label>${t("mobile")}<input id="f-phone" value="${esc(draft.phone)}" inputmode="tel" autocomplete="tel" required></label>
       <label>${t("email")}<input id="f-email" type="email" value="${esc(draft.email)}" autocomplete="email" required></label>
       <label>${t("address")}<textarea id="f-addr" rows="2" required>${esc(draft.addr)}</textarea></label>
-      <label>${t("pick_village")}
-        <div class="villagewrap">
-          <select id="f-village">
-            <option value="">${t("village_placeholder")}</option>
-            ${S.config.villages.map(v=>`<option value="${v.id}" ${draft.villageId===v.id?"selected":""}>${villageName(v)}</option>`).join("")}
-          </select>
-          <button type="button" class="locbtn" id="useLoc">${ICON.pin}${t("use_location")}</button>
-        </div>
-      </label>
+      <label>${t("pin_label")}<input id="f-pincode" inputmode="numeric" maxlength="6" value="${esc(draft.pincode||"")}" placeholder="${t("pin_placeholder")}"></label>
+      <div id="villageStepWrap"></div>
       <div class="eta" id="eta"></div>
       <p class="sec-label" style="margin:6px 0 0">${t("payment")}</p>
       <div class="upi-pref" id="payBox"></div>
@@ -1079,28 +1090,49 @@ function openCheckout(){
       <button type="button" class="cod-link" id="codLink"></button>
     </form>`);
   $("#sx").onclick=closeSheet;
-  const vSel=$("#f-village");
-  const updEta=()=>{ const v=villageById(vSel.value); $("#eta").className="eta "+(v?etaForVillage(v).cls:""); $("#eta").textContent = v?etaForVillage(v).text:t("eta_hint"); };
-  vSel.onchange=updEta; updEta();
-  $("#useLoc").onclick=()=>{
+  const updEta=()=>{ const v=villageById(draft.villageId); $("#eta").className="eta "+(v?etaForVillage(v).cls:""); $("#eta").textContent = v?etaForVillage(v).text:t("eta_hint"); };
+  // PIN code narrows the list to villages whose OWN pincode matches (pick one, done — no distance
+  // check, we trust the pincode+name match). Re-rendered on every keystroke in the PIN box.
+  function renderVillageStep(){
+    const pin=$("#f-pincode").value.trim(); draft.pincode=pin;
+    const wrap=$("#villageStepWrap");
+    const matches = pin.length>=6 ? villagesForPincode(pin) : [];
+    if(pin.length>=6 && !matches.length){
+      wrap.innerHTML = `<div class="err">${t("pin_no_match")}</div>
+        <button type="button" class="locbtn" id="shareLocBtn">${ICON.pin}${t("share_loc_cta")}</button>`;
+    } else if(matches.length){
+      wrap.innerHTML = `<label>${t("pick_village")}
+          <select id="f-village">
+            <option value="">${t("village_placeholder")}</option>
+            ${matches.map(v=>`<option value="${v.id}" ${draft.villageId===v.id?"selected":""}>${villageName(v)}</option>`).join("")}
+          </select>
+        </label>
+        <button type="button" class="locbtn" id="shareLocBtn">${ICON.pin}${t("share_loc_cta")}</button>`;
+    } else {
+      wrap.innerHTML = `<div style="font-size:12px;color:var(--muted)">${t("pin_hint")}</div>`;
+    }
+    const vSel=$("#f-village");
+    if(vSel) vSel.onchange=()=>{ draft.villageId=vSel.value; updEta(); };
+    const shareBtn=$("#shareLocBtn");
+    if(shareBtn) shareBtn.onclick=useLocationFallback;
+    updEta();
+  }
+  // Fallback when the customer can't find/select their village: checks their live GPS point
+  // against EVERY village's own center+radius and picks whichever one contains them (nearest,
+  // if more than one circle overlaps there). Doesn't touch the PIN/village dropdown above —
+  // draft.villageId is what actually gets submitted either way.
+  function useLocationFallback(){
     $("#eta").className="eta"; $("#eta").textContent=t("locating");
     if(!navigator.geolocation){ $("#eta").className="eta bad"; $("#eta").textContent=t("loc_denied"); return; }
     navigator.geolocation.getCurrentPosition(pos=>{
       const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};
-      const zone=S.config.zone;
-      if(zone && zone.lat!=null && zone.lng!=null && zone.radiusKm>0 && haversineKm(loc,{lat:zone.lat,lng:zone.lng})<=zone.radiusKm){
-        // Inside the owner-set same-day zone (center+radius): treat as the fastest (Pipariya town) tier
-        // regardless of which village is geographically nearest.
-        const sameV=S.config.villages.find(v=>v.tier==="same")||S.config.villages[0];
-        vSel.value=sameV.id; updEta(); toast(LANG==="hi"?"आप पिपरिया डिलीवरी ज़ोन में हैं":"You're inside the same-day delivery zone");
-        return;
-      }
-      const near=nearestVillage(loc);
-      const nearDist=near?haversineKm(loc,near):Infinity;
-      if(near && nearDist<=MAX_DELIVERY_KM){ vSel.value=near.id; updEta(); toast((LANG==="hi"?"नजदीकी गांव: ":"Nearest match: ")+villageName(near)); }
-      else{ $("#eta").className="eta bad"; $("#eta").textContent = LANG==="hi" ? "आपकी लोकेशन हमारे डिलीवरी क्षेत्र से बाहर लग रही है — कृपया गांव खुद चुनें।" : "Your location looks outside our delivery area — please pick your village manually."; }
+      const match=villageForLocation(loc);
+      if(match){ draft.villageId=match.id; updEta(); toast((LANG==="hi"?"मिल गया: ":"Matched: ")+villageName(match)); }
+      else{ draft.villageId=""; $("#eta").className="eta bad"; $("#eta").textContent=t("outside_area"); }
     }, ()=>{ $("#eta").className="eta bad"; $("#eta").textContent=t("loc_denied"); }, {timeout:6000});
-  };
+  }
+  $("#f-pincode").oninput=renderVillageStep;
+  renderVillageStep();
   const payUI=()=>{
     $("#payBox").innerHTML = draft.mode==="UPI" ? `<span><b>${t("upi_main")}</b></span><small>${t("upi_sub")}</small>` : `<span><b>${t("cod_main")}</b></span><small style="color:var(--muted)">${t("cod_sub")}</small>`;
     $("#ckSubmit").textContent = draft.mode==="UPI"?t("continue_pay"):t("place_cod");
@@ -1112,7 +1144,7 @@ function openCheckout(){
   $("#ck").onsubmit=e=>{
     e.preventDefault();
     if(ckSubmitting) return;
-    Object.assign(draft,{name:$("#f-name").value.trim(),phone:$("#f-phone").value.trim(),email:$("#f-email").value.trim(),addr:$("#f-addr").value.trim(),villageId:vSel.value});
+    Object.assign(draft,{name:$("#f-name").value.trim(),phone:$("#f-phone").value.trim(),email:$("#f-email").value.trim(),addr:$("#f-addr").value.trim()});
     if(!draft.name||!/^\d{10}$/.test(draft.phone.replace(/\D/g,"").slice(-10))||!draft.addr){$("#ckErr").textContent=t("err_fill");return}
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email)){$("#ckErr").textContent=t("err_email");return}
     if(!draft.villageId){$("#ckErr").textContent=t("err_village");return}
