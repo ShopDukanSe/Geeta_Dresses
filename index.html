@@ -61,10 +61,17 @@ a{color:#fff}
 .langtog button.on{background:var(--wine);color:#fff;opacity:1}
 .owner-btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 10px;font-size:13px;white-space:nowrap}
 .searchresults{position:absolute;left:0;right:0;top:calc(100% + 6px);background:var(--surface);color:var(--fg);border-radius:12px;box-shadow:0 10px 24px rgba(0,0,0,.25);z-index:9;max-height:260px;overflow-y:auto}
-.searchresults button{display:flex;gap:10px;align-items:center;width:100%;padding:8px 10px;border:0;background:none;text-align:left;border-bottom:1px solid var(--line)}
-.searchresults img{width:38px;height:48px;object-fit:cover;border-radius:6px}
-.searchresults .sr-meta{font-size:13px;min-width:0}
-.searchresults .sr-meta div:first-child{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* .hitrow is the shared compact "search result row" look (thumbnail + name + price), applied
+   directly on each row button so it renders correctly wherever a result list is shown — the
+   home dropdown (.searchresults), AND the feed/orders search sheet (#sheetSearchResults). It
+   used to be scoped as "#.searchresults button/img/..." only, so the exact same markup dropped
+   into the search SHEET had none of this styling — buttons fell back to plain block elements
+   and photos rendered at full natural size (one giant uncropped photo filling the sheet) instead
+   of a compact scrollable list. That's what made sheet search look "broken".  */
+.hitrow{display:flex;gap:10px;align-items:center;width:100%;padding:8px 10px;border:0;background:none;text-align:left;border-bottom:1px solid var(--line)}
+.hitrow img{width:38px;height:48px;object-fit:cover;border-radius:6px;flex:0 0 auto}
+.hitrow .sr-meta{font-size:13px;min-width:0}
+.hitrow .sr-meta div:first-child{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 .banner{margin:10px 16px 0;background:linear-gradient(90deg,#1c3b2e,#2f7d4f);color:#fff;border-radius:14px;padding:11px 14px;font-size:13px;font-weight:600;box-shadow:0 10px 22px rgba(20,60,40,.26);border:1px solid rgba(255,255,255,.14);display:flex;align-items:center;gap:8px;position:relative;z-index:3}
 .promo-rail{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:10px;padding:12px 16px 2px;scrollbar-width:none}
@@ -403,8 +410,14 @@ let REMOTE_CONFIG=null; // kept so renderBanners() can re-run on a language swit
 // uploaded language-specific banners yet (or just upgraded) still shows whatever it already has
 // instead of a blank slot.
 function bannerFor(config, n){
-  const other = LANG==="hi" ? "en" : "hi";
-  return config["banner_"+n+"_"+LANG] || config["banner_"+n+"_"+other] || config["banner_"+n] || "";
+  // IMPORTANT: no fallback to the OTHER language's banner here. An earlier version of this did
+  // `config["banner_"+n+"_"+LANG] || config["banner_"+n+"_"+other] || ...` to avoid ever showing
+  // a blank slot — but that meant uploading ONLY a Hindi banner made it show to English visitors
+  // too (and vice versa) the moment the matching language slot was empty. Each language now only
+  // ever shows its OWN banner, falling back solely to the old pre-language banner_<n> value
+  // (which was always shown to everyone, from before this per-language feature existed) — never
+  // to the other language's photo.
+  return config["banner_"+n+"_"+LANG] || config["banner_"+n] || "";
 }
 function renderBanners(){
   if(!REMOTE_CONFIG) return;
@@ -939,7 +952,11 @@ function filterProducts(q, full){
   return full ? hits : hits.slice(0,SEARCH_PREVIEW_SIZE);
 }
 function searchHitsHTML(hits){
-  return hits.map(p=>`<button data-id="${p.id}"><img src="${p.photos[0]}" alt=""><div class="sr-meta"><div>${esc(pName(p))}</div><div style="color:var(--muted)">${rs(p.price)}</div></div></button>`).join("");
+  return hits.map(p=>`<button class="hitrow" data-id="${p.id}"><img src="${p.photos[0]}" alt=""><div class="sr-meta"><div>${esc(pName(p))}</div><div style="color:var(--muted)">${rs(p.price)}</div></div></button>`).join("");
+}
+function seeAllBtnHTML(allCount, previewCount){
+  if(allCount<=previewCount) return "";
+  return `<button class="hitrow" data-seeall="1" style="justify-content:center;font-weight:700;color:var(--wine)">${LANG==="hi"?`सभी ${allCount} नतीजे देखें`:`See all ${allCount} results`}</button>`;
 }
 // Opening a product from search now matches how the grid opens one — straight into the
 // full-screen swipe reel (the "Instagram thing"), swiping through the REST of that same
@@ -951,11 +968,10 @@ $("#searchInput").oninput=e=>{
   const allHits=filterProducts(lastSearchQ, true);
   const preview=allHits.slice(0,SEARCH_PREVIEW_SIZE);
   $("#searchResults").hidden = !allHits.length;
-  $("#searchResults").innerHTML = searchHitsHTML(preview)
-    + (allHits.length>preview.length ? `<button id="searchSeeAll" style="justify-content:center;font-weight:700;color:var(--wine)">${LANG==="hi"?`सभी ${allHits.length} नतीजे देखें`:`See all ${allHits.length} results`}</button>` : "");
+  $("#searchResults").innerHTML = searchHitsHTML(preview) + seeAllBtnHTML(allHits.length, preview.length);
 };
 $("#searchResults").onclick=e=>{
-  if(e.target.closest("#searchSeeAll")){
+  if(e.target.closest("[data-seeall]")){
     $("#searchResults").hidden=true;
     openGrid(filterProducts(lastSearchQ, true), (LANG==="hi"?`"${lastSearchQ}" के लिए खोज`:`Search: "${lastSearchQ}"`), {mode:"search", q:lastSearchQ});
     $("#searchInput").value=""; return;
@@ -982,9 +998,22 @@ function openSearchSheet(){
   $("#sx").onclick=closeSheet;
   const inp=$("#sheetSearchInput"), res=$("#sheetSearchResults");
   setTimeout(()=>inp.focus(),50);
-  let sheetHits=[];
-  inp.oninput=()=>{ sheetHits=filterProducts(inp.value, true); res.innerHTML = searchHitsHTML(sheetHits); };
-  res.onclick=e=>{const b=e.target.closest("[data-id]");if(!b)return;const q=inp.value;closeSheet();openProductFromList(b.dataset.id, sheetHits, LANG==="hi"?`"${q}" खोज`:`Search: "${q}"`);};
+  let sheetHits=[], sheetAllHits=[];
+  inp.oninput=()=>{
+    sheetAllHits=filterProducts(inp.value, true);
+    sheetHits=sheetAllHits.slice(0,SEARCH_PREVIEW_SIZE);
+    res.innerHTML = searchHitsHTML(sheetHits) + seeAllBtnHTML(sheetAllHits.length, sheetHits.length);
+  };
+  res.onclick=e=>{
+    const q=inp.value;
+    if(e.target.closest("[data-seeall]")){
+      closeSheet();
+      openGrid(sheetAllHits, LANG==="hi"?`"${q}" के लिए खोज`:`Search: "${q}"`, {mode:"search", q});
+      return;
+    }
+    const b=e.target.closest("[data-id]");if(!b)return;
+    closeSheet();openProductFromList(b.dataset.id, sheetAllHits, LANG==="hi"?`"${q}" खोज`:`Search: "${q}"`);
+  };
 }
 $("#openSearchFeed").onclick=openSearchSheet;
 $("#openSearchOrders").onclick=openSearchSheet;
