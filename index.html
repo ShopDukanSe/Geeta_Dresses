@@ -345,6 +345,10 @@ body{margin:0}
       <div class="cats" id="cats"></div>
       <div class="policy" id="policyLand"></div>
       <button class="foot-link" id="openPrivacy"></button>
+      <!-- ShopDukaanSe marketplace attribution — links out to the central home.html, where
+           customers can discover OTHER shops nearby. Purely a footer credit; never changes
+           anything about this shop's own checkout/ordering flow. -->
+      <a class="foot-link" id="poweredBy" style="text-decoration:none" target="_blank" rel="noopener">Powered by <b style="color:var(--brandgreen)">ShopDukaanSe</b></a>
     </div>
   </section>
 
@@ -401,7 +405,7 @@ body{margin:0}
 
 <script>
 /* ================= Config ================= */
-let SHOP = { name:"Geeta Dresses", owner:"Rajesh Agrawal", upiId:"geetadresses@upi", upiName:"Geeta Dresses", phone:"+91 98xxx xxxxx", email:"geetadresses.pipariya@gmail.com", gstin:"23AAAAA0000A1Z5 (sample, pending registration)" };
+let SHOP = { name:"Geeta Dresses", owner:"Rajesh Agrawal", upiId:"geetadresses@upi", upiName:"Geeta Dresses", phone:"+91 98xxx xxxxx", email:"geetadresses.pipariya@gmail.com", gstin:"23AAAAA0000A1Z5 (sample, pending registration)", whatsapp:"" };
 let _bannerAutoTimer=null; // home-screen banner auto-advance interval (see renderBanners)
 let REMOTE_CONFIG=null; // kept so renderBanners() can re-run on a language switch without refetching
 // Banners can now be uploaded separately per language in owner.html. Key shape in the Config
@@ -451,9 +455,22 @@ function applyRemoteConfig(config){
   if(config.phone) SHOP.phone=config.phone;
   if(config.email) SHOP.email=config.email;
   if(config.gstin) SHOP.gstin=config.gstin;
+  // WhatsApp quick-order (ShopDukaanSe): purely additive — the full COD/UPI checkout below is
+  // untouched. If the owner has added a "whatsapp_number" row in their Config sheet, we show a
+  // small WhatsApp button on the product page that pre-fills a message with that product's name
+  // so the customer can also just message the shop directly, Swiggy/Zomato-card style.
+  if(config.whatsapp_number) SHOP.whatsapp=String(config.whatsapp_number).replace(/\D/g,"");
   if(config.cancel_window_hours!=null) CANCEL_WINDOW_HOURS = Number(config.cancel_window_hours)||CANCEL_WINDOW_HOURS;
   if(config.issue_report_window_hours!=null) ISSUE_WINDOW_HOURS = Number(config.issue_report_window_hours)||ISSUE_WINDOW_HOURS;
   renderBanners();
+}
+function whatsappOrderLink(p){
+  var num = SHOP.whatsapp;
+  if(!num) return "";
+  var msg = (LANG==="hi"
+    ? `Namaste, mujhe ${SHOP.name} se ye order karna hai: ${p?p.name:""}`
+    : `Hi, I'd like to order this from ${SHOP.name}: ${p?p.name:""}`);
+  return `https://wa.me/${num}?text=${encodeURIComponent(msg)}`;
 }
 const STORE_KEY = "gd_demo_v3";
 /* ================= Real backend (Google Sheet via Apps Script Web App) ================= */
@@ -461,6 +478,9 @@ const STORE_KEY = "gd_demo_v3";
    string in owner.html — a single find-replace fills both once you have deployed Code.gs. */
 const API_URL = "https://script.google.com/macros/s/AKfycbw4KrkN3F6oWTDto9RVRtMmfrgbaE3g3qP6tD6BqoTNzecpj0beAmiEpkCc1yzoQq0/exec";
 function apiConfigured(){ return typeof API_URL==="string" && API_URL && !API_URL.includes("PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE"); }
+// Where the central ShopDukaanSe marketplace home page (home.html, GitHub Pages) lives — update
+// this once that site is published. Only used for the "Powered by ShopDukaanSe" footer link.
+const MARKETPLACE_URL = "https://shopdukanse.github.io/main_page/";
 async function apiGetAll(){
   const res = await fetch(API_URL + (API_URL.includes("?")?"&":"?") + "action=all");
   const data = await res.json();
@@ -642,6 +662,7 @@ function applyStaticLabels(){
   updateShopStrip();
   $("#searchInput").placeholder=t("search_ph"); $("#banner").textContent=t("banner");
   $("#qcLabel").textContent=t("quick_shop"); $("#openPrivacy").textContent=t("privacy_link");
+  $("#poweredBy").href=MARKETPLACE_URL;
   $("#feedBackLbl").textContent=t("back"); $("#bagLbl").textContent=t("nav_bag"); $("#bagLblGrid").textContent=t("nav_bag");
   $("#ordersTitle").textContent=t("orders_title");
   $("#lk-phone").placeholder=t("lk_ph"); $("#findBtn").textContent=t("find");
@@ -1250,6 +1271,7 @@ function openDetails(id, focusSize){
     ${totalStock===0
       ? `<button class="cta alt" id="addBtn" disabled style="opacity:.5">${t("sold_out")}</button>`
       : `<button class="cta alt" id="addBtn">${t("add")}</button>`}
+    ${SHOP.whatsapp?`<button class="wa" id="waOrderBtn" style="width:100%;margin-top:8px;border:1px solid #25d366;background:#25d366;color:#07310f;border-radius:10px;padding:10px;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px">${LANG==="hi"?"WhatsApp पर ऑर्डर करें":"Order on WhatsApp"}</button>`:""}
     <div class="share-row"><button class="wa" id="dWa">${t("share_wa")}</button><button id="dCopy">${t("share_copy")}</button></div>
     ${p.description?`<p style="margin:12px 0 0;font-size:14px;line-height:1.5">${esc(p.description)}</p>`:""}
     <dl class="specs">${Object.entries(p.specs).map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}<dt>${t("code")}</dt><dd>${p.id}</dd></dl>
@@ -1271,6 +1293,9 @@ function openDetails(id, focusSize){
   const text=`${pName(p)} — ${rs(p.price)} · Geeta Dresses, Pipariya.\n${link}`;
   $("#dWa").onclick=()=>window.open("https://wa.me/?text="+encodeURIComponent(text),"_blank","noopener");
   $("#dCopy").onclick=()=>{navigator.clipboard?.writeText(link).then(()=>toast(t("link_copied"))).catch(()=>toast(link))};
+  // Additive WhatsApp quick-order: messages the SHOP's own number directly (not a generic share),
+  // so the customer can order this product by chat without touching the COD/UPI checkout at all.
+  const waBtn=$("#waOrderBtn"); if(waBtn) waBtn.onclick=()=>window.open(whatsappOrderLink(p),"_blank","noopener");
   if(focusSize && !size) $("#sz .size:not([disabled])")?.focus();
 }
 function updateCartCount(){ const n=S.cart.reduce((a,c)=>a+c.qty,0); $("#cartCount").textContent=n; const g=$("#cartCountGrid"); if(g) g.textContent=n; }
